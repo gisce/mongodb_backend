@@ -20,31 +20,8 @@
 #
 ##############################################################################
 
-from osv.osv import module_class_list, module_list, class_pool
+
 import orm_mongodb
 
-
-class osv_mongodb(orm_mongodb.orm_mongodb):
-    #__metaclass__ = inheritor
-    def __new__(cls):
-        module = str(cls)[6:]
-        module = module[:len(module) - 1]
-        module = module.split('.')[0][2:]
-        if not hasattr(cls, '_module'):
-            cls._module = module
-        module_class_list.setdefault(cls._module, []).append(cls)
-        class_pool[cls._name] = cls
-        if module not in module_list:
-            module_list.append(cls._module)
-        return None
-
-    def createInstance(cls, pool, module, cr):
-        obj = object.__new__(cls)
-        obj.__init__(pool, cr)
-        return obj
-    createInstance = classmethod(createInstance)
-
-    def __init__(self, pool, cr):
-        pool.add(self._name, self)
-        self.pool = pool
-        orm_mongodb.orm_mongodb.__init__(self, cr)
+# Backwards compatibility
+osv_mongodb = orm_mongodb.orm_mongodb

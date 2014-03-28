@@ -20,12 +20,13 @@
 #
 ##############################################################################
 
-from osv import orm
-from osv.orm import except_orm
-import netsvc
+from openerp.osv import orm
+from openerp.osv.orm import except_orm
 import re
 import pymongo
 import gridfs
+import logging
+import sys
 from bson.objectid import ObjectId
 from datetime import datetime
 
@@ -36,17 +37,21 @@ except ImportError:
     sys.stderr.write("ERROR: Import mongodb module\n")
 
 
-class orm_mongodb(orm.orm_template):
+_logger = logging.getLogger(__name__)
+
+
+class orm_mongodb(orm.BaseModel):
 
     _protected = ['read', 'write', 'create', 'default_get', 'perm_read',
                   'unlink', 'fields_get', 'fields_view_get', 'search',
                   'name_get', 'distinct_field_get', 'name_search', 'copy',
                   'import_data', 'search_count', 'exists']
 
+    _register = False
+
     def _auto_init(self, cr, context=None):
         self._field_create(cr, context=context)
-        logger = netsvc.Logger()
-
+        self._foreign_keys = []
         db = mdbpool.get_db()
 
         #Create the model counters document in order to
@@ -74,10 +79,8 @@ class orm_mongodb(orm.orm_template):
                                           {a: {'$exists': True}}),
                                           self._defaults.keys())
         if len(def_fields):
-            logger.notifyChannel('orm', netsvc.LOG_INFO,
-                                 'setting default value for \
-                                  %s of collection %s' % (def_fields,
-                                                          self._table))
+            _logger.info('orm: setting default value for '
+                         '%s of collection %s' % (def_fields, self._table))
             def_values = self.default_get(cr, 1, def_fields)
             collection.update({},
                               {'$set': def_values},
@@ -89,9 +92,8 @@ class orm_mongodb(orm.orm_template):
         if db.error():
             raise except_orm('MongoDB update defaults error', db.error())
 
-    def __init__(self, cr):
-        super(orm_mongodb, self).__init__(cr)
-        cr.execute('delete from wkf_instance where res_type=%s', (self._name,))
+    def __init__(self, pool, cr):
+        super(orm_mongodb, self).__init__(pool, cr)
 
     def get_date_fields(self):
         return [key for key, val in self._columns.iteritems()
@@ -212,8 +214,8 @@ class orm_mongodb(orm.orm_template):
 
         if not context:
             context = {}
-        self.pool.get('ir.model.access').check(cr, user, self._name,
-                                                'read', context=context)
+        self.pool.get('ir.model.access').check(cr, user, self._name, 'read',
+                                               True, context)
         if not fields:
             fields = self._columns.keys()
         select = ids
@@ -310,8 +312,8 @@ class orm_mongodb(orm.orm_template):
 
         if not context:
             context = {}
-        self.pool.get('ir.model.access').check(cr, user, self._name,
-                                               'create', context=context)
+        self.pool.get('ir.model.access').check(cr, user, self._name, 'create',
+                                               True, context)
 
         if self._defaults:
             #Default values
@@ -383,8 +385,8 @@ class orm_mongodb(orm.orm_template):
         new_args = mdbpool.translate_domain(tmp_args)
         if not context:
             context = {}
-        self.pool.get('ir.model.access').check(cr, user,
-                        self._name, 'read', context=context)
+        self.pool.get('ir.model.access').check(cr, user, self._name, 'read',
+                                               True, context)
         #Performance problems for counting in mongodb
         #Only count when forcing. Else return limit
         #https://jira.mongodb.org/browse/SERVER-1752
@@ -432,8 +434,8 @@ class orm_mongodb(orm.orm_template):
         if isinstance(ids, (int, long)):
             ids = [ids]
 
-        self.pool.get('ir.model.access').check(cr, uid, self._name,
-                                               'unlink', context=context)
+        self.pool.get('ir.model.access').check(cr, uid, self._name, 'unlink',
+                                               True, context)
 
         # Remove binary fields (files in gridfs)
         self.unlink_binary_gridfs_fields(collection, ids)
