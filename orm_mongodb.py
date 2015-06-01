@@ -49,27 +49,17 @@ class orm_mongodb(orm.orm_template):
 
         db = mdbpool.get_db()
 
-        #Create the model counters document in order to
-        #have incremental ids the way postgresql does
+        # Create the model counters document in order to
+        # have incremental ids the way postgresql does
         collection = db['counters']
 
-        if not collection.find({'_id': self._table}).count():
-            vals = {'_id': self._table,
-                    'counter': 1}
-            collection.save(vals)
-
         collection = db[self._table]
-        #Create index for the id field
-        collection.ensure_index([('id', pymongo.ASCENDING)],
-                                deprecated_unique=None,
-                                ttl=300,
-                                unique=True)
 
         if db.error():
             raise except_orm('MongoDB create id field index error', db.error())
-        #Update docs with new default values if they do not exist
-        #If we find at least one document with this field
-        #we assume that the field is present in the collection
+        # Update docs with new default values if they do not exist
+        # If we find at least one document with this field
+        # we assume that the field is present in the collection
         def_fields = filter(lambda a: not collection.find_one(
                                           {a: {'$exists': True}}),
                                           self._defaults.keys())
@@ -222,21 +212,15 @@ class orm_mongodb(orm.orm_template):
         result = self._read_flat(cr, user, select, fields, context, load)
 
         for r in result:
-            for key, v in r.items():
-                #remove the '_id' field from the response
+            for key, v in r.iteritems():
+                # remove the '_id' field from the response
                 if key == '_id':
+                    r['id'] = str(v)
                     del r[key]
-                    continue
-                #WTF. id field is not always readed as int
-                if key == 'id':
-                    r[key] = int(v)
-                    continue
                 if v is None:
                     r[key] = False
-                else:
-                    continue
 
-        if isinstance(ids, (int, long)):
+        if isinstance(ids, basestring):
             return result and result[0] or False
         return result
 
@@ -250,6 +234,8 @@ class orm_mongodb(orm.orm_template):
         if not ids:
             return []
 
+        ids = [ObjectId(_x) for _x in ids]
+
         if fields_to_read is None:
             fields_to_read = self._columns.keys()
 
@@ -261,15 +247,14 @@ class orm_mongodb(orm.orm_template):
                                                            '_classic_write'))
                      ]
 
-        res = []
-        if len(fields_pre):
+        if fields_pre:
             order = self._compute_order(cr, user)
-            mongo_cr = collection.find({'id': {'$in': ids}},
-                                       fields_pre + ['id'],
+            mongo_cr = collection.find({'_id': {'$in': ids}},
+                                       fields_pre,
                                        sort=order)
             res = [x for x in mongo_cr]
         else:
-            res = map(lambda x: {'id': x}, ids)
+            res = map(lambda x: {'_id': x}, ids)
         #Post process date and datetime fields
         self.read_date_fields(fields_to_read, res)
         self.read_binary_gridfs_fields(fields_to_read, res)
@@ -284,19 +269,21 @@ class orm_mongodb(orm.orm_template):
         if not ids:
             return True
 
+        ids = [ObjectId(_x) for _x in ids]
+
         self.pool.get('ir.model.access').check(cr, user, self._name,
                                                'write', context=context)
-        #Pre process date and datetime fields
+        # Pre process date and datetime fields
         self.preformat_write_fields(vals)
         self.write_binary_gridfs_fields(vals)
 
-        #Log access
+        # Log access
         vals.update({'write_uid': user,
                      'write_date': datetime.now(),
                     })
 
         #bulk update with modifiers, and safe mode
-        collection.update({'id': {'$in': ids}},
+        collection.update({'_id': {'$in': ids}},
                           {'$set': vals},
                           False, False, True, True)
 
@@ -324,34 +311,29 @@ class orm_mongodb(orm.orm_template):
                 default_values = self.default_get(cr, user, default, context)
                 vals.update(default_values)
 
-        #Add incremental id to store vals
-        counter = mdbpool.get_collection('counters').find_and_modify(
-                    {'_id': self._table},
-                    {'$inc': {'counter': 1}})
-        vals.update({'id': counter['counter']})
-        #Pre proces date fields
+        # Pre proces date fields
         self.preformat_write_fields(vals)
         self.write_binary_gridfs_fields(vals)
-        #Log access
+        # Log access
         vals.update({'create_uid': user,
                      'create_date': datetime.now(),
                     })
 
-        #Effectively create the record
-        collection.insert(vals)
+        # Effectively create the record
+        oid = collection.insert(vals)
 
-        return vals['id']
+        return str(oid)
 
     def _compute_order(self, cr, user, order=None, context=None):
-        #Parse the order of the object to addapt it to MongoDB
+        # Parse the order of the object to addapt it to MongoDB
 
         if not order:
             order = self._order
 
         mongo_order = order.split(',')
-        #If we only have one order field
-        #it can contain asc or desc
-        #Otherwise is not allowed
+        # If we only have one order field
+        # it can contain asc or desc
+        # Otherwise is not allowed
         if len(mongo_order) == 1:
             reg_expr = '^(([a-z0-9_]+|"[a-z0-9_]+")( *desc)+( *, *|))+$'
             order_desc = re.compile(reg_expr, re.I)
@@ -375,8 +357,8 @@ class orm_mongodb(orm.orm_template):
 
     def search(self, cr, user, args, offset=0, limit=0, order=None,
             context=None, count=False):
-        #Make a copy of args for working
-        #Domain has to be list of lists
+        # Make a copy of args for working
+        # Domain has to be list of lists
         tmp_args = [isinstance(arg, tuple) and list(arg)
                     or arg for arg in args]
         collection = mdbpool.get_collection(self._table)
@@ -387,22 +369,22 @@ class orm_mongodb(orm.orm_template):
             context = {}
         self.pool.get('ir.model.access').check(cr, user,
                         self._name, 'read', context=context)
-        #Performance problems for counting in mongodb
-        #Only count when forcing. Else return limit
-        #https://jira.mongodb.org/browse/SERVER-1752
+        # Performance problems for counting in mongodb
+        # Only count when forcing. Else return limit
+        # https://jira.mongodb.org/browse/SERVER-1752
         if not context.get('force_count', False) and count:
             return limit
-        #In very large collections when no args
-        #orders all documents prior to return a result
-        #so when no filters, order by id that is sure that
-        #has an individual index and works very fast
+        # In very large collections when no args
+        # orders all documents prior to return a result
+        # so when no filters, order by id that is sure that
+        # has an individual index and works very fast
         if not args:
-            order = 'id'
+            order = '_id'
 
         if count:
             return collection.find(
                     new_args,
-                    {'id': 1},
+                    {'_id': 1},
                     skip=int(offset),
                     limit=int(limit),
                     timeout=True,
@@ -412,7 +394,7 @@ class orm_mongodb(orm.orm_template):
 
         mongo_cr = collection.find(
                     new_args,
-                    {'id': 1},
+                    {'_id': 1},
                     skip=int(offset),
                     limit=int(limit),
                     timeout=True,
@@ -420,7 +402,7 @@ class orm_mongodb(orm.orm_template):
                     tailable=False,
                     sort=self._compute_order(cr, user, order))
 
-        res = [x['id'] for x in mongo_cr]
+        res = [str(x['_id']) for x in mongo_cr]
 
         return res
 
@@ -431,16 +413,18 @@ class orm_mongodb(orm.orm_template):
 
         if not ids:
             return True
-        if isinstance(ids, (int, long)):
+        if isinstance(ids, basestring):
             ids = [ids]
+
+        ids = [ObjectId(_x) for _x in ids]
 
         self.pool.get('ir.model.access').check(cr, uid, self._name,
                                                'unlink', context=context)
 
         # Remove binary fields (files in gridfs)
         self.unlink_binary_gridfs_fields(collection, ids)
-        #Remove with safe mode
-        collection.remove({'id': {'$in': ids}}, True)
+        # Remove with safe mode
+        collection.remove({'_id': {'$in': ids}}, True)
 
         if db.error():
             raise except_orm('MongoDB unlink error', db.error())
@@ -459,26 +443,26 @@ class orm_mongodb(orm.orm_template):
         if isinstance(ids, (int, long)):
             ids = [ids]
 
+        ids = [ObjectId(x) for x in ids]
+
         collection = mdbpool.get_collection(self._table)
 
-        fields = ['id', 'create_uid', 'create_date',
+        fields = ['_id', 'create_uid', 'create_date',
                   'write_uid', 'write_date']
 
-        res = []
-        mongo_cr = collection.find({'id': {'$in': ids}}, fields)
+        mongo_cr = collection.find({'_id': {'$in': ids}}, fields)
         res = [x for x in mongo_cr]
         for doc in res:
             docfields = doc.keys()
             for field in fields:
                 if field not in docfields:
                     doc[field] = False
-                if field in ['create_date', 'write_date']\
-                    and doc[field]:
+                if field in ['create_date', 'write_date'] and doc[field]:
                     doc[field] = doc[field].strftime('%Y-%m-%d %H:%M:%S')
-                if field in ['create_uid', 'write_uid']\
-                    and doc[field]:
+                if field in ['create_uid', 'write_uid'] and doc[field]:
                     doc[field] = self.pool.get('res.users').name_get(cr,
                                                         user, [doc[field]])[0]
+            doc['id'] = str(doc['_id'])
             del doc['_id']
 
         return res
