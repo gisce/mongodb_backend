@@ -9,7 +9,7 @@ as it was stored in PostgreSQL from the client.
   "author": "Joan M. Grande",
   "license" : "GPL-3",
   "category": "Generic Modules",
-  "depends": [],
+  "depends": ['base'],
   "init_xml": [],
   "demo_xml": [],
   "update_xml": [],
