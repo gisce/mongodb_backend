@@ -543,6 +543,6 @@ class orm_mongodb(orm.orm_template):
         # get the default values defined in the object
         for f in fields_list:
             if f in self._defaults:
-                value[f] = self._defaults[f](self, cr, uid, context)
+                value[f] = self._defaults[f]
 
         return value
