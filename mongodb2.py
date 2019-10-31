@@ -162,7 +162,7 @@ class MDBConn(object):
                 mongo_client = MongoReplicaSetClient
 
             connection = mongo_client(self.uri, **kwargs)
-        except Exception, e:
+        except Exception as e:
             raise except_orm('MongoDB connection error', e)
         return connection
 
@@ -198,7 +198,7 @@ class MDBConn(object):
                     sleep(0.5)
             if count == 4:
                 raise except_orm('MongoDB connection error', ar_e)
-        except Exception, e:
+        except Exception as e:
             raise except_orm('MongoDB connection error', e)
 
         return collection
@@ -221,7 +221,7 @@ class MDBConn(object):
                 except AutoReconnect:
                     count += 1
                     sleep(0.5)
-        except Exception, e:
+        except Exception as e:
             raise except_orm('MongoDB connection error', e)
 
         return db

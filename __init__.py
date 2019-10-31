@@ -1,3 +1,4 @@
-import mongodb2
-import orm_mongodb
-import osv_mongodb
+from __future__ import absolute_import
+from . import mongodb2
+from . import orm_mongodb
+from . import osv_mongodb

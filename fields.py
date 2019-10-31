@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-
+from __future__ import absolute_import
 from osv.fields import char
 from tools import human_size
 
 import pymongo
 import gridfs as gfs
-from mongodb2 import mdbpool
+from .mongodb2 import mdbpool
 from bson.objectid import ObjectId
 
 

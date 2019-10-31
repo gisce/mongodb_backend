@@ -19,10 +19,11 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
+from __future__ import absolute_import
 import copy
 
 from osv.osv import module_class_list, module_list, class_pool
-import orm_mongodb
+from . import orm_mongodb
 
 
 class osv_mongodb(orm_mongodb.orm_mongodb):

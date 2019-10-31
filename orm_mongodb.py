@@ -19,7 +19,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
-
+from __future__ import absolute_import
 from osv import orm, fields
 from osv.orm import except_orm
 import netsvc
@@ -33,7 +33,7 @@ from tools.translate import _
 
 #mongodb stuff
 try:
-    from mongodb2 import mdbpool
+    from .mongodb2 import mdbpool
 except ImportError:
     import sys
     sys.stderr.write("ERROR: Import mongodb module\n")
