@@ -30,6 +30,7 @@ from bson.objectid import ObjectId
 from datetime import datetime
 from numbers import Number
 from tools.translate import _
+import six
 
 #mongodb stuff
 try:
@@ -82,7 +83,7 @@ class orm_mongodb(orm.orm_template):
             x['key'][0][0] for x in collection.index_information().values()
                 if 'key' in x and len(x['key']) == 1
         ]
-        for field_name, field_obj in self._columns.iteritems():
+        for field_name, field_obj in six.iteritems(self._columns):
             if getattr(field_obj, 'select', False):
                 if field_name not in created_idx:
                     collection.ensure_index(field_name, background=True)
@@ -116,15 +117,15 @@ class orm_mongodb(orm.orm_template):
         cr.execute('delete from wkf_instance where res_type=%s', (self._name,))
 
     def get_date_fields(self):
-        return [key for key, val in self._columns.iteritems()
+        return [key for key, val in six.iteritems(self._columns)
                       if val._type in ('date', 'datetime')]
 
     def get_bool_fields(self):
-        return [key for key, val in self._columns.iteritems()
+        return [key for key, val in six.iteritems(self._columns)
                       if val._type in ('boolean')]
 
     def get_binary_gridfs_fields(self):
-        return [key for key, val in self._columns.iteritems()
+        return [key for key, val in six.iteritems(self._columns)
                       if val._type in ('binary')
                          and getattr(val, 'gridfs', False)]
 
@@ -222,7 +223,7 @@ class orm_mongodb(orm.orm_template):
 
     def preformat_write_fields(self, vals):
 
-        for key, value in vals.iteritems():
+        for key, value in six.iteritems(vals):
             if key == 'id':
                 continue
             if self._columns[key]._type in ('date', 'datetime'):
