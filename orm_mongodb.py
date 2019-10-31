@@ -93,9 +93,10 @@ class orm_mongodb(orm.orm_template):
         #Update docs with new default values if they do not exist
         #If we find at least one document with this field
         #we assume that the field is present in the collection
-        def_fields = filter(lambda a: not collection.find_one(
-                                          {a: {'$exists': True}}),
-                                          self._defaults.keys())
+        def_fields = [
+            x for x in self._defaults.keys()
+            if not collection.find_one({x: {'$exists': True}})
+        ]
         if len(def_fields):
             logger.notifyChannel('orm', netsvc.LOG_INFO,
                                  'setting default value for \
