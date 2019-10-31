@@ -307,7 +307,7 @@ class orm_mongodb(orm.orm_template):
                                        sort=order)
             res = [x for x in mongo_cr]
         else:
-            res = map(lambda x: {'id': x}, ids)
+            res = [{'id': x} for x in ids]
         #Post process date and datetime fields
         self.read_date_fields(fields_to_read, res)
         self.read_binary_gridfs_fields(fields_to_read, res)
