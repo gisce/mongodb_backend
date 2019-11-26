@@ -58,46 +58,6 @@ class MDBConn(object):
     def translate_domain(self, domain):
         """Translate an OpenERP domain object to a corresponding
         MongoDB domain
-
-        >>> mdbconn = MDBConn()
-        >>> mdbconn.translate_domain([('name', '=', 'ol')])
-        {'name': 'ol'}
-        >>> mdbconn.translate_domain([('name', '!=', 'ol')])
-        {'name': {'$ne': 'ol'}}
-
-        >>> mdbconn.translate_domain([('name', 'like', 'ol%')])
-        ... # doctest: +ELLIPSIS
-        {'name': {'$regex': <_sre.SRE_Pattern object at 0x...>}}
-        >>> mdbconn.translate_domain([('name', 'not like', '%ol%')])
-        ... # doctest: +ELLIPSIS
-        {'name': {'$not': <_sre.SRE_Pattern object at 0x...>}}
-        >>> mdbconn.translate_domain([('name', 'ilike', '%ol%')])
-        ... # doctest: +ELLIPSIS
-        {'name': <_sre.SRE_Pattern object at 0x...>}
-        >>> mdbconn.translate_domain([('name', 'not ilike', '%ol%')])
-        ... # doctest: +ELLIPSIS
-        {'name': {'$not': <_sre.SRE_Pattern object at 0x...>}}
-
-        >>> mdbconn.translate_domain([('_id', 'in', [1, 2, 3])])
-        {'_id': {'$in': [1, 2, 3]}}
-        >>> mdbconn.translate_domain([('_id', 'not in', [1, 2, 3])])
-        {'_id': {'$nin': [1, 2, 3]}}
-        >>> mdbconn.translate_domain([('_id', '<=', 10)])
-        {'_id': {'$lte': 10}}
-        >>> mdbconn.translate_domain([('_id', '<', 10)])
-        {'_id': {'$lt': 10}}
-        >>> mdbconn.translate_domain([('_id', '>=', 10)])
-        {'_id': {'$gte': 10}}
-        >>> mdbconn.translate_domain([('_id', '>', 10)])
-        {'_id': {'$gt': 10}}
-        >>> mdbconn.translate_domain([('_id', '>', 10), ('_id', '<', 15)])
-        {'_id': {'$gt': 10, '$lt': 15}}
-        >>> mdbconn.translate_domain([('_id', '>', 10),
-        ...                   ('_id', '<', 15),
-        ...                   ('name', 'ilike', '%ol%')])
-        ... # doctest: +ELLIPSIS
-        {'_id': {'$gt': 10, '$lt': 15}, \
-'name': <_sre.SRE_Pattern object at 0x...>}
         """
         new_domain = {}
         for field, operator, value in domain:

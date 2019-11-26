@@ -1,18 +1,64 @@
 import unittest
+import re
 
 from osv import osv, fields
 from mongodb_backend import testing, osv_mongodb
 from expects import *
 from destral.transaction import Transaction
 
-import doctest
 from mongodb_backend import mongodb2
 from mongodb_backend import orm_mongodb
 
 
-def load_tests(loader, tests, ignore):
-    tests.addTests(doctest.DocTestSuite(mongodb2))
-    return tests
+class TestTranslateDomain(unittest.TestCase):
+
+    def test_translate_domain(self):
+        mdbconn = mongodb2.MDBConn()
+        res = mdbconn.translate_domain([('name', '=', 'ol')])
+        self.assertEqual(res, {'name': 'ol'})
+
+        res = mdbconn.translate_domain([('name', '!=', 'ol')])
+        self.assertEqual(res, {'name': {'$ne': 'ol'}})
+
+        res = mdbconn.translate_domain([('name', 'like', 'ol%')])
+        self.assertEqual(res, {'name': {'$regex': re.compile('ol.*')}})
+
+        res = mdbconn.translate_domain([('name', 'not like', '%ol%')])
+        self.assertEqual(res, {'name': {'$not': re.compile('.*ol.*')}})
+
+        res = mdbconn.translate_domain([('name', 'ilike', '%ol%')])
+        self.assertEqual(res, {'name': re.compile('.*ol.*', re.IGNORECASE)})
+
+        res = mdbconn.translate_domain([('name', 'not ilike', '%ol%')])
+        self.assertEqual(res, {'name': {'$not': re.compile('.*ol.*', re.IGNORECASE)}})
+
+        res = mdbconn.translate_domain([('_id', 'in', [1, 2, 3])])
+        self.assertEqual(res, {'_id': {'$in': [1, 2, 3]}})
+
+        res = mdbconn.translate_domain([('_id', 'not in', [1, 2, 3])])
+        self.assertEqual(res, {'_id': {'$nin': [1, 2, 3]}})
+
+        res = mdbconn.translate_domain([('_id', '<=', 10)])
+        self.assertEqual(res, {'_id': {'$lte': 10}})
+
+        res = mdbconn.translate_domain([('_id', '<', 10)])
+        self.assertEqual(res, {'_id': {'$lt': 10}})
+
+        res = mdbconn.translate_domain([('_id', '>=', 10)])
+        self.assertEqual(res, {'_id': {'$gte': 10}})
+
+        res = mdbconn.translate_domain([('_id', '>', 10)])
+        self.assertEqual(res, {'_id': {'$gt': 10}})
+
+        res = mdbconn.translate_domain([('_id', '>', 10), ('_id', '<', 15)])
+        self.assertEqual(res, {'_id': {'$gt': 10, '$lt': 15}})
+
+        res = mdbconn.translate_domain([
+            ('_id', '>', 10),
+            ('_id', '<', 15),
+            ('name', 'ilike', '%ol%')
+        ])
+        self.assertEqual(res, {'_id': {'$gt': 10, '$lt': 15}, 'name': re.compile('.*ol.*', re.IGNORECASE)})
 
 
 def test_compute_order_parsing(self):
