@@ -31,6 +31,8 @@ from datetime import datetime
 from numbers import Number
 from tools.translate import _
 import six
+import tools
+
 
 #mongodb stuff
 try:
@@ -115,7 +117,8 @@ class orm_mongodb(orm.orm_template):
 
     def __init__(self, cr):
         super(orm_mongodb, self).__init__(cr)
-        cr.execute('delete from wkf_instance where res_type=%s', (self._name,))
+        if not tools.config.get('db_readonly', False):
+            cr.execute('delete from wkf_instance where res_type=%s', (self._name,))
 
     def get_date_fields(self):
         return [key for key, val in six.iteritems(self._columns)
@@ -232,6 +235,8 @@ class orm_mongodb(orm.orm_template):
             elif self._columns[key]._type in ('int', 'float'):
                 ss = self._columns[key]._symbol_set
                 vals[key] = ss[1](value)
+            elif self._columns[key]._type in ('boolean'):
+                vals[key] = bool(value)
 
     def exists(self, cr, uid, ids, context=None):
         collection = mdbpool.get_collection(self._table)
