@@ -459,6 +459,20 @@ class orm_mongodb(orm.orm_template):
         tmp_args = [isinstance(arg, tuple) and list(arg)
                     or arg for arg in args]
         collection = mdbpool.get_collection(self._table)
+
+        new_tmp_args = []
+        for k, operator, value in args:
+            field = self._columns.get(k)
+            if field._fnct_search:
+                new_tmp_args.extend(
+                    field._fnct_search(self, cr, user, self, k, tmp_args, context=context)
+                )
+            else:
+                new_tmp_args.append(
+                    (k, operator, value)
+                )
+        tmp_args = new_tmp_args
+
         self.search_trans_fields(tmp_args)
 
         new_args = mdbpool.translate_domain(tmp_args)
