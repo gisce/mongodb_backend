@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from osv.fields import char
+from osv.fields import char, text
 from tools import human_size
 
 import pymongo
@@ -9,19 +9,20 @@ from mongodb2 import mdbpool
 from bson.objectid import ObjectId
 
 
-class gridfs(char):
+class gridfs(text):
     """GridFS filesystem PostgreSQL <-> MongoDB
 
     We will save ObjectId string into PostgreSQL database
     """
     _classic_read = False
     _classic_write = False
-    _type = 'char'
+    pg_type = 'text', 'text'
 
     def __init__(self, string, **args):
         self.versioning = False
-        super(gridfs, self).__init__(string=string, size=24, widget='binary',
-                                     **args)
+        super(gridfs, self).__init__(
+            string=string, widget='binary', **args
+        )
 
     def get_oids(self, cursor, obj, ids, name):
         cursor.execute("select id, " + name + " from " + obj._table +
@@ -41,7 +42,7 @@ class gridfs(char):
             if oid and fs.exists(ObjectId(oid)) and not self.versioning:
                 fs.delete(ObjectId(oid))
             if value:
-                _id = fs.put(value, filename=filename)
+                _id = fs.put(value, filename=filename, encoding="utf-8")
                 value = str(_id)
             if not value and self.versioning:
                 fs.delete(ObjectId(oid))
