@@ -19,7 +19,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
-
+from __future__ import absolute_import
 from osv import orm, fields
 from osv.orm import except_orm
 import netsvc
@@ -30,11 +30,13 @@ from bson.objectid import ObjectId
 from datetime import datetime
 from numbers import Number
 from tools.translate import _
+import six
 import tools
+
 
 #mongodb stuff
 try:
-    from mongodb2 import mdbpool
+    from .mongodb2 import mdbpool
 except ImportError:
     import sys
     sys.stderr.write("ERROR: Import mongodb module\n")
@@ -83,7 +85,7 @@ class orm_mongodb(orm.orm_template):
             x['key'][0][0] for x in collection.index_information().values()
                 if 'key' in x and len(x['key']) == 1
         ]
-        for field_name, field_obj in self._columns.iteritems():
+        for field_name, field_obj in six.iteritems(self._columns):
             if getattr(field_obj, 'select', False):
                 if field_name not in created_idx:
                     collection.ensure_index(field_name, background=True)
@@ -93,9 +95,10 @@ class orm_mongodb(orm.orm_template):
         #Update docs with new default values if they do not exist
         #If we find at least one document with this field
         #we assume that the field is present in the collection
-        def_fields = filter(lambda a: not collection.find_one(
-                                          {a: {'$exists': True}}),
-                                          self._defaults.keys())
+        def_fields = [
+            x for x in self._defaults.keys()
+            if not collection.find_one({x: {'$exists': True}})
+        ]
         if len(def_fields):
             logger.notifyChannel('orm', netsvc.LOG_INFO,
                                  'setting default value for \
@@ -118,15 +121,15 @@ class orm_mongodb(orm.orm_template):
             cr.execute('delete from wkf_instance where res_type=%s', (self._name,))
 
     def get_date_fields(self):
-        return [key for key, val in self._columns.iteritems()
+        return [key for key, val in six.iteritems(self._columns)
                       if val._type in ('date', 'datetime')]
 
     def get_bool_fields(self):
-        return [key for key, val in self._columns.iteritems()
+        return [key for key, val in six.iteritems(self._columns)
                       if val._type in ('boolean')]
 
     def get_binary_gridfs_fields(self):
-        return [key for key, val in self._columns.iteritems()
+        return [key for key, val in six.iteritems(self._columns)
                       if val._type in ('binary')
                          and getattr(val, 'gridfs', False)]
 
@@ -224,7 +227,7 @@ class orm_mongodb(orm.orm_template):
 
     def preformat_write_fields(self, vals):
 
-        for key, value in vals.iteritems():
+        for key, value in six.iteritems(vals):
             if key == 'id':
                 continue
             if self._columns[key]._type in ('date', 'datetime'):
@@ -261,24 +264,25 @@ class orm_mongodb(orm.orm_template):
             select = [ids]
         result = self._read_flat(cr, user, select, fields, context, load)
 
+        new_result = []
         for r in result:
-            for key, v in r.items():
+            value = {}
+            for key, v in six.iteritems(r):
                 #remove the '_id' field from the response
                 if key == '_id':
-                    del r[key]
                     continue
                 #WTF. id field is not always readed as int
                 if key == 'id':
-                    r[key] = int(v)
-                    continue
-                if v is None:
-                    r[key] = False
+                    value[key] = int(v)
+                elif v is None:
+                    value[key] = False
                 else:
-                    continue
+                    value[key] = v
+            new_result.append(value)
 
         if isinstance(ids, Number):
-            return result and result[0] or False
-        return result
+            new_result = new_result[0] or False
+        return new_result
 
     def _read_flat(self, cr, user, ids, fields_to_read, context=None,
                    load='_classic_read'):
@@ -309,7 +313,7 @@ class orm_mongodb(orm.orm_template):
                                        sort=order)
             res = [x for x in mongo_cr]
         else:
-            res = map(lambda x: {'id': x}, ids)
+            res = [{'id': x} for x in ids]
         #Post process date and datetime fields
         self.read_date_fields(fields_to_read, res)
         self.read_binary_gridfs_fields(fields_to_read, res)
@@ -323,7 +327,7 @@ class orm_mongodb(orm.orm_template):
         for f in fields_function:
             todo.setdefault(self._columns[f]._multi, [])
             todo[self._columns[f]._multi].append(f)
-        for key,val in todo.items():
+        for key, val in six.iteritems(todo):
             if key:
                 res2 = self._columns[val[0]].get(cr, self, ids, val, user,
                                                  context=context, values=res)
