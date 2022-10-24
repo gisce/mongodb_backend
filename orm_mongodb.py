@@ -117,7 +117,7 @@ class orm_mongodb(orm.orm_template):
 
     def __init__(self, cr):
         super(orm_mongodb, self).__init__(cr)
-        if not tools.config.get('db_readonly', False):
+        if not cr._cnx.readonly:
             cr.execute('delete from wkf_instance where res_type=%s', (self._name,))
 
     def get_date_fields(self):

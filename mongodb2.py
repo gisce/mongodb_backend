@@ -36,7 +36,7 @@ logger = netsvc.Logger()
 class MDBConn(object):
 
     OPERATOR_MAPPING = {
-        '=': lambda l1, l3: {l1: l3},
+        '=': lambda l1, l3: {l1: {'$eq': l3}},
         '!=': lambda l1, l3: {l1: {'$ne': l3}},
         '<=': lambda l1, l3: {l1: {'$lte': l3}},
         '>=': lambda l1, l3: {l1: {'$gte': l3}},
@@ -73,39 +73,78 @@ class MDBConn(object):
         """ Mongo uri calculation with backward compatibility prior to 0.4v
         """
         def_db = tools.config.get('db_name', 'openerp')
-        tools.config['mongodb_name'] = tools.config.get('mongodb_name',
-                                                        def_db)
-        tools.config['mongodb_port'] = tools.config.get('mongodb_port', '27017')
-        tools.config['mongodb_host'] = tools.config.get('mongodb_host', '')
+        tools.config['mongodb_force_uri'] = tools.config.get('mongodb_force_uri', '')
+        tools.config['mongodb_force_uri_readonly'] = tools.config.get('mongodb_force_uri_readonly', '')
+        tools.config['db_readonly'] = tools.config.get('db_readonly', False)
+
+        tools.config['mongodb_user_readonly'] = tools.config.get('mongodb_user_readonly', '')
+        tools.config['mongodb_user_readonly_pass'] = tools.config.get('mongodb_user_readonly_pass', '')
         tools.config['mongodb_user'] = tools.config.get('mongodb_user', '')
         tools.config['mongodb_pass'] = tools.config.get('mongodb_pass', '')
-        tools.config['mongodb_uri'] = tools.config.get(  # Default
-            'mongodb_uri', 'mongodb://localhost:27017/'
-        )
 
-        """
-            MONGODB-CR  - mongo 2.4, 2.6 - defecto para mantener compatibilidad
-            SCRAM-SHA-1 - mongo 3.x
-        """
-        tools.config['mongodb_auth'] = tools.config.get('mongodb_auth',
-                                                        'MONGODB-CR')
+        if tools.config['db_readonly']:
 
-        uri = tools.config['mongodb_uri']  # with replicaset must use uri
-        if not tools.config.get('mongodb_replicaset', False):
-            if tools.config['mongodb_user']:
-                # Auth
-                uri_tmpl = 'mongodb://%s:%s@%s:%s/%s?authMechanism=%s'
-                uri = uri_tmpl % (tools.config['mongodb_user'],
-                                  tools.config['mongodb_pass'],
-                                  tools.config['mongodb_host'],
-                                  tools.config['mongodb_port'],
-                                  tools.config['mongodb_name'],
-                                  tools.config['mongodb_auth'])
-            elif tools.config['mongodb_host']:
-                # No auth
-                uri_tmpl = 'mongodb://%s:%s/'
-                uri = uri_tmpl % (tools.config['mongodb_host'],
-                                  int(tools.config['mongodb_port']))
+            if not tools.config['mongodb_user_readonly'] and not tools.config['mongodb_force_uri_readonly']:
+                logger.notifyChannel(
+                    'MongoDB', netsvc.LOG_WARNING,
+                    (
+                        "No se ha configurado ningun usuario de solo lectura "
+                        "ni tampoco una URI especificada para readonly "
+                        "las operacions de escritura no estan protegidas"
+                    )
+                )
+            elif not tools.config['mongodb_force_uri_readonly']:
+                tools.config['mongodb_user'] = tools.config['mongodb_user_readonly']
+                tools.config['mongodb_pass'] = tools.config['mongodb_user_readonly_pass']
+
+        if tools.config['mongodb_force_uri']:
+            uri = tools.config['mongodb_force_uri']
+
+        else:
+            tools.config['mongodb_ssl'] = tools.config.get('mongodb_ssl', False)
+            tools.config['mongodb_name'] = tools.config.get('mongodb_name', def_db)
+            tools.config['mongodb_port'] = tools.config.get('mongodb_port', '27017')
+            tools.config['mongodb_host'] = tools.config.get('mongodb_host', '')
+
+            tools.config['mongodb_uri'] = tools.config.get(  # Default
+                'mongodb_uri',
+                (
+                    'mongodb://localhost:27017/'
+                    if not tools.config['mongodb_ssl']
+                    else 'mongodb://localhost:27017/?ssl=true'
+                )
+            )
+
+            """
+                MONGODB-CR  - mongo 2.4, 2.6 - defecto para mantener compatibilidad
+                SCRAM-SHA-1 - mongo 3.x
+            """
+            tools.config['mongodb_auth'] = tools.config.get('mongodb_auth',
+                                                            'MONGODB-CR')
+
+            uri = tools.config['mongodb_uri']  # with replicaset must use uri
+            if not tools.config.get('mongodb_replicaset', False):
+                if tools.config['mongodb_user']:
+                    # Auth
+                    if tools.config['mongodb_ssl']:
+                        uri_tmpl = 'mongodb://%s:%s@%s:%s/%s?ssl=true&authMechanism=%s'
+                    else:
+                        uri_tmpl = 'mongodb://%s:%s@%s:%s/%s?authMechanism=%s'
+                    uri = uri_tmpl % (tools.config['mongodb_user'],
+                                      tools.config['mongodb_pass'],
+                                      tools.config['mongodb_host'],
+                                      tools.config['mongodb_port'],
+                                      tools.config['mongodb_name'],
+                                      tools.config['mongodb_auth'])
+                elif tools.config['mongodb_host']:
+                    # No auth
+                    if tools.config['mongodb_ssl']:
+                        uri_tmpl = 'mongodb://%s:%s/?ssl=true'
+                    else:
+                        uri_tmpl = 'mongodb://%s:%s/'
+
+                    uri = uri_tmpl % (tools.config['mongodb_host'],
+                                      int(tools.config['mongodb_port']))
         return uri
 
     def mongo_connect(self):
@@ -118,7 +157,7 @@ class MDBConn(object):
             kwargs = {}
             if tools.config['mongodb_replicaset']:
                 kwargs.update({'replicaSet': tools.config['mongodb_replicaset'],
-                               'read_preference': ReadPreference.PRIMARY_PREFERRED})
+                               'read_preference': ReadPreference.SECONDARY_PREFERRED})
                 mongo_client = MongoReplicaSetClient
 
             connection = mongo_client(self.uri, **kwargs)
