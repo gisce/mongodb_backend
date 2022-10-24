@@ -114,6 +114,28 @@ class MDBConn(object):
         """
         def_db = tools.config.get('db_name', 'openerp')
         tools.config['mongodb_force_uri'] = tools.config.get('mongodb_force_uri', '')
+        tools.config['mongodb_force_uri_readonly'] = tools.config.get('mongodb_force_uri_readonly', '')
+        tools.config['db_readonly'] = tools.config.get('db_readonly', False)
+
+        tools.config['mongodb_user_readonly'] = tools.config.get('mongodb_user_readonly', '')
+        tools.config['mongodb_user_readonly_pass'] = tools.config.get('mongodb_user_readonly_pass', '')
+        tools.config['mongodb_user'] = tools.config.get('mongodb_user', '')
+        tools.config['mongodb_pass'] = tools.config.get('mongodb_pass', '')
+
+        if tools.config['db_readonly']:
+
+            if not tools.config['mongodb_user_readonly'] and not tools.config['mongodb_force_uri_readonly']:
+                logger.notifyChannel(
+                    'MongoDB', netsvc.LOG_WARNING,
+                    (
+                        "No se ha configurado ningun usuario de solo lectura "
+                        "ni tampoco una URI especificada para readonly "
+                        "las operacions de escritura no estan protegidas"
+                    )
+                )
+            elif not tools.config['mongodb_force_uri_readonly']:
+                tools.config['mongodb_user'] = tools.config['mongodb_user_readonly']
+                tools.config['mongodb_pass'] = tools.config['mongodb_user_readonly_pass']
 
         if tools.config['mongodb_force_uri']:
             uri = tools.config['mongodb_force_uri']
@@ -123,8 +145,7 @@ class MDBConn(object):
             tools.config['mongodb_name'] = tools.config.get('mongodb_name', def_db)
             tools.config['mongodb_port'] = tools.config.get('mongodb_port', '27017')
             tools.config['mongodb_host'] = tools.config.get('mongodb_host', '')
-            tools.config['mongodb_user'] = tools.config.get('mongodb_user', '')
-            tools.config['mongodb_pass'] = tools.config.get('mongodb_pass', '')
+
             tools.config['mongodb_uri'] = tools.config.get(  # Default
                 'mongodb_uri',
                 (
