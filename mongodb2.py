@@ -21,7 +21,7 @@
 ##############################################################################
 
 import tools
-from pymongo import MongoClient, MongoReplicaSetClient
+from pymongo import MongoClient
 from pymongo.errors import AutoReconnect
 from pymongo.read_preferences import ReadPreference
 import re
@@ -158,7 +158,6 @@ class MDBConn(object):
             if tools.config['mongodb_replicaset']:
                 kwargs.update({'replicaSet': tools.config['mongodb_replicaset'],
                                'read_preference': ReadPreference.SECONDARY_PREFERRED})
-                mongo_client = MongoReplicaSetClient
 
             connection = mongo_client(self.uri, **kwargs)
         except Exception as e:
@@ -207,6 +206,7 @@ class MDBConn(object):
         try:
             db = self.connection[tools.config['mongodb_name']]
         except AutoReconnect:
+
             max_tries = 5
             count = 0
             while count < max_tries:
