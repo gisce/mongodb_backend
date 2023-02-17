@@ -463,7 +463,8 @@ class orm_mongodb(orm.orm_template):
         new_tmp_args = []
         for k, operator, value in args:
             field = self._columns.get(k)
-            if hasattr(field, '_fnct_search') and field._fnct_search:
+            fnct_search = getattr(field, '_fnct_search', None)
+            if fnct_search:
                 new_tmp_args.extend(
                     field._fnct_search(self, cr, user, self, k, tmp_args, context=context)
                 )
