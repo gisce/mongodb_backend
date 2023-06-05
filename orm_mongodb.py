@@ -108,7 +108,7 @@ class orm_mongodb(orm.orm_template):
                               {'$set': def_values},
                               upsert=False,
                               manipulate=False,
-                              safe=True,
+                              w=1,
                               multi=True)
 
         if db.error():
