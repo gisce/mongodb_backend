@@ -71,9 +71,8 @@ class orm_mongodb(orm.orm_template):
         collection = db[self._table]
         #Create index for the id field
         try:
-            collection.ensure_index([('id', pymongo.ASCENDING)],
-                                    ttl=300,
-                                    unique=True)
+            # Replace for create_index in a future, ensure_index deprecated since 3.
+            collection.ensure_index([('id', pymongo.ASCENDING)], cache_for=300, unique=True)
         except pymongo.errors.OperationFailure as e:
             if e.details and "already exists with different options" in e.details.get("errmsg", " "):
                 pass
