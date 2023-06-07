@@ -15,7 +15,7 @@ class TestTranslateDomain(unittest.TestCase):
     def test_translate_domain(self):
         mdbconn = mongodb2.MDBConn()
         res = mdbconn.translate_domain([('name', '=', 'ol')])
-        self.assertEqual(res, {'name': 'ol'})
+        self.assertIn(res, ({'name': 'ol'}, {'name': {'$eq': 'ol'}}))
 
         res = mdbconn.translate_domain([('name', '!=', 'ol')])
         self.assertEqual(res, {'name': {'$ne': 'ol'}})
