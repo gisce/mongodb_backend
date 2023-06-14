@@ -502,7 +502,7 @@ class orm_mongodb(orm.orm_template):
                     modifiers={"$snapshot": False},
                     sort=self._compute_order(cr, user, order))
 
-        res = [x['id'] for x in mongo_cr]
+        res = [x['id'] for x in mongo_cr if x.get('id')]
 
         return res
 
