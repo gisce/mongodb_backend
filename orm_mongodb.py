@@ -499,7 +499,8 @@ class orm_mongodb(orm.orm_template):
                     no_cursor_timeout=True,
                     sort=self._compute_order(cr, user, order))
         # Removed modifiers={"$snapshot": False}, False by default
-        res = [x['id'] for x in mongo_cr]
+
+        res = [x['id'] for x in mongo_cr if 'id' in x]
 
         return res
 
