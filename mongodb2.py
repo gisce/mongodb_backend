@@ -41,7 +41,9 @@ class MDBConn(object):
         '<=': lambda l1, l3: {l1: {'$lte': l3}},
         '>=': lambda l1, l3: {l1: {'$gte': l3}},
         '<': lambda l1, l3: {l1: {'$lt': l3}},
+        '&lt;': lambda l1, l3: {l1: {'$lt': l3}},
         '>': lambda l1, l3: {l1: {'$gt': l3}},
+        '&gt;': lambda l1, l3: {l1: {'$gt': l3}},
 
         'in': lambda l1, l3: {l1: {'$in': l3}},
         'not in': lambda l1, l3: {l1: {'$nin': l3}},
