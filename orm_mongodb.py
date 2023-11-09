@@ -74,7 +74,9 @@ class orm_mongodb(orm.orm_template):
             # Replace for create_index in a future, ensure_index deprecated since 3.
             collection.ensure_index([('id', pymongo.ASCENDING)], cache_for=300, unique=True)
         except pymongo.errors.OperationFailure as e:
-            if e.details and "already exists with different options" in e.details.get("errmsg", " "):
+            if e.details and "An existing index has the same name as the requested index" in e.details.get("errmsg", " "):
+                pass
+            elif e.details and "already exists with different options" in e.details.get("errmsg", " "):
                 pass
             else:
                 raise
