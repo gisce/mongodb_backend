@@ -71,11 +71,12 @@ class orm_mongodb(orm.orm_template):
         collection = db[self._table]
         #Create index for the id field
         try:
-            collection.ensure_index([('id', pymongo.ASCENDING)],
-                                    ttl=300,
-                                    unique=True)
+            # Replace for create_index in a future, ensure_index deprecated since 3.
+            collection.ensure_index([('id', pymongo.ASCENDING)], cache_for=300, unique=True)
         except pymongo.errors.OperationFailure as e:
-            if e.details and "already exists with different options" in e.details.get("errmsg", " "):
+            if e.details and "An existing index has the same name as the requested index" in e.details.get("errmsg", " "):
+                pass
+            elif e.details and "already exists with different options" in e.details.get("errmsg", " "):
                 pass
             else:
                 raise
@@ -109,7 +110,7 @@ class orm_mongodb(orm.orm_template):
                               {'$set': def_values},
                               upsert=False,
                               manipulate=False,
-                              safe=True,
+                              w=1,
                               multi=True)
 
         if db.error():
@@ -489,8 +490,7 @@ class orm_mongodb(orm.orm_template):
             return collection.find(
                     new_args,
                     {'id': 1},
-                    no_cursor_timeout=True,
-                    modifiers={"$snapshot": False},
+                    no_cursor_timeout=True
             ).count()
 
         mongo_cr = collection.find(
@@ -499,8 +499,8 @@ class orm_mongodb(orm.orm_template):
                     skip=int(offset),
                     limit=int(limit),
                     no_cursor_timeout=True,
-                    modifiers={"$snapshot": False},
                     sort=self._compute_order(cr, user, order))
+        # Removed modifiers={"$snapshot": False}, False by default
 
         res = [x['id'] for x in mongo_cr if 'id' in x]
 
