@@ -251,6 +251,26 @@ class orm_mongodb(orm.orm_template):
         res = [x for x in mongo_cr]
         return True if res else False
 
+    def export_data2(self, cursor, uid, domain, limit, fields_to_export, format,
+                     context=None):
+        ids = self.search(cursor, uid, domain, limit=limit, context=context)
+        result = self.export_data(cursor, uid, ids, fields_to_export, context=context)
+        import pandas as pd
+        import base64
+        from io import BytesIO
+        df = pd.DataFrame(result['datas'])
+        # Respect the columns order
+        buf = BytesIO()
+        if format == 'csv':
+            df.to_csv(buf, index=None, sep=str(';'))
+        elif format == 'xlsx':
+            xlsx_writer = pd.ExcelWriter(buf, engine='xlsxwriter')
+            df.to_excel(xlsx_writer, index=None)
+            xlsx_writer.save()
+        res = {'datas': base64.b64encode(buf.getvalue()), 'format': format}
+        buf.close()
+        return res
+
     def read(self, cr, user, ids, fields=None, context=None,
              load='_classic_read'):
 
