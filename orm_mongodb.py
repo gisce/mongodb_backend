@@ -31,6 +31,7 @@ from datetime import datetime
 from numbers import Number
 from tools.translate import _
 import six
+from tools import isolation
 import tools
 
 
@@ -579,3 +580,8 @@ class orm_mongodb(orm.orm_template):
                 value[f] = self._defaults[f](self, cr, uid, context)
 
         return value
+
+    @isolation(readonly=True, isolation_level='repeatable_read')
+    def export_data2(self, cursor, uid, domain, limit, fields_to_export, format, context=None):
+        ids = self.search(cursor, uid, domain, context=context)
+        return self.export_data(cursor, uid, ids, fields_to_export, context=context)
