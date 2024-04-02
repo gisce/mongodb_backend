@@ -253,12 +253,23 @@ class orm_mongodb(orm.orm_template):
 
     def export_data2(self, cursor, uid, domain, limit, fields_to_export, format,
                      context=None):
+        def get_human_name(path):
+            result = []
+            obj = self
+            for f in path.split('.'):
+                r = obj.fields_get(cursor, uid, [f], context=context)
+                result.append(r.get(f, {'string': f})['string'])
+                if 'relation' in r:
+                    obj = self.pool.get(r['relation'])
+            return ' > '.join(result)
+
         ids = self.search(cursor, uid, domain, limit=limit, context=context)
         result = self.export_data(cursor, uid, ids, fields_to_export, context=context)
         import pandas as pd
         import base64
         from io import BytesIO
-        df = pd.DataFrame(result['datas'])
+        columns = [get_human_name(f) for f in fields_to_export]
+        df = pd.DataFrame(result['datas'], columns=columns)
         # Respect the columns order
         buf = BytesIO()
         if format == 'csv':
