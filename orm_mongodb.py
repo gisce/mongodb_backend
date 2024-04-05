@@ -30,6 +30,7 @@ from bson.objectid import ObjectId
 from datetime import datetime
 from numbers import Number
 from tools.translate import _
+from tools import readonly
 import six
 import tools
 
@@ -250,6 +251,38 @@ class orm_mongodb(orm.orm_template):
         mongo_cr = collection.find({'id': ids}, ['id'])
         res = [x for x in mongo_cr]
         return True if res else False
+
+    @readonly()
+    def export_data2(self, cursor, uid, domain, limit, fields_to_export, format,
+                     context=None):
+        def get_human_name(path):
+            result = []
+            obj = self
+            for f in path.split('.'):
+                r = obj.fields_get(cursor, uid, [f], context=context)
+                result.append(r.get(f, {'string': f})['string'])
+                if 'relation' in r:
+                    obj = self.pool.get(r['relation'])
+            return ' > '.join(result)
+
+        ids = self.search(cursor, uid, domain, limit=limit, context=context)
+        result = self.export_data(cursor, uid, ids, fields_to_export, context=context)
+        import pandas as pd
+        import base64
+        from io import BytesIO
+        columns = [get_human_name(f) for f in fields_to_export]
+        df = pd.DataFrame(result['datas'], columns=columns)
+        # Respect the columns order
+        buf = BytesIO()
+        if format == 'csv':
+            df.to_csv(buf, index=None, sep=str(';'))
+        elif format == 'xlsx':
+            xlsx_writer = pd.ExcelWriter(buf, engine='xlsxwriter')
+            df.to_excel(xlsx_writer, index=None)
+            xlsx_writer.save()
+        res = {'datas': base64.b64encode(buf.getvalue()), 'format': format}
+        buf.close()
+        return res
 
     def read(self, cr, user, ids, fields=None, context=None,
              load='_classic_read'):
