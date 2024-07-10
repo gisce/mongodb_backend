@@ -285,7 +285,7 @@ class orm_mongodb(orm.orm_template):
         return res
 
     def read(self, cr, user, ids, fields=None, context=None,
-             load='_classic_read'):
+             load='_classic_read', order=None):
 
         if not context:
             context = {}
@@ -296,7 +296,7 @@ class orm_mongodb(orm.orm_template):
         select = ids
         if isinstance(ids, Number):
             select = [ids]
-        result = self._read_flat(cr, user, select, fields, context, load)
+        result = self._read_flat(cr, user, select, fields, context, load, order=order)
 
         new_result = []
         for r in result:
@@ -319,7 +319,7 @@ class orm_mongodb(orm.orm_template):
         return new_result
 
     def _read_flat(self, cr, user, ids, fields_to_read, context=None,
-                   load='_classic_read'):
+                   load='_classic_read', order=None):
 
         collection = mdbpool.get_collection(self._table)
 
@@ -341,7 +341,7 @@ class orm_mongodb(orm.orm_template):
 
         res = []
         if len(fields_pre):
-            order = self._compute_order(cr, user)
+            order = self._compute_order(cr, user, order=order)
             mongo_cr = collection.find({'id': {'$in': ids}},
                                        fields_pre + ['id'],
                                        sort=order)
