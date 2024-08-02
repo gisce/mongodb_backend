@@ -30,7 +30,7 @@ from bson.objectid import ObjectId
 from datetime import datetime
 from numbers import Number
 from tools.translate import _
-from tools import readonly
+from tools.sql_utils import isolation
 import six
 import tools
 
@@ -252,7 +252,7 @@ class orm_mongodb(orm.orm_template):
         res = [x for x in mongo_cr]
         return True if res else False
 
-    @readonly()
+    @isolation(readonly=True, isolation_level='repeatable_read')
     def export_data2(self, cursor, uid, domain, limit, fields_to_export, format,
                      context=None):
         def get_human_name(path):
