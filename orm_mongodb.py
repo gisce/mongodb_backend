@@ -33,6 +33,7 @@ from tools.translate import _
 from tools.sql_utils import isolation
 import six
 import tools
+from six import integer_types
 
 
 #mongodb stuff
@@ -546,7 +547,7 @@ class orm_mongodb(orm.orm_template):
 
         if not ids:
             return True
-        if isinstance(ids, (int, long)):
+        if isinstance(ids, integer_types):
             ids = [ids]
 
         self.pool.get('ir.model.access').check(cr, uid, self._name,
@@ -575,7 +576,7 @@ class orm_mongodb(orm.orm_template):
         if not ids:
             return []
 
-        if isinstance(ids, (int, long)):
+        if isinstance(ids, integer_types):
             ids = [ids]
 
         collection = mdbpool.get_collection(self._table)
