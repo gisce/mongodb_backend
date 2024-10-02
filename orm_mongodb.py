@@ -53,6 +53,12 @@ class orm_mongodb(orm.orm_template):
 
     _inherit_fields = {}
 
+    def _create_index_field(self, collection, field_name, background=True, **kwargs):
+        try:
+            res = collection.create_index(field_name, background=True, **kwargs)
+        except Exception as e:
+            raise except_orm('MongoDB create id field index error', '{}'.format(e))
+
     def _auto_init(self, cr, context=None):
         if context is None:
             context = {}
@@ -71,10 +77,9 @@ class orm_mongodb(orm.orm_template):
             collection.save(vals)
 
         collection = db[self._table]
-        #Create index for the id field
+        # Create index for the id field
         try:
-            # Replace for create_index in a future, ensure_index deprecated since 3.
-            collection.ensure_index([('id', pymongo.ASCENDING)], cache_for=300, unique=True)
+            collection.create_index([('id', pymongo.ASCENDING)], unique=True)
         except pymongo.errors.OperationFailure as e:
             if e.details and "An existing index has the same name as the requested index" in e.details.get("errmsg", " "):
                 pass
@@ -91,10 +96,8 @@ class orm_mongodb(orm.orm_template):
         for field_name, field_obj in six.iteritems(self._columns):
             if getattr(field_obj, 'select', False):
                 if field_name not in created_idx:
-                    collection.ensure_index(field_name, background=True)
+                    self._create_index_field(collection, field_name)
 
-        if db.error():
-            raise except_orm('MongoDB create id field index error', db.error())
         #Update docs with new default values if they do not exist
         #If we find at least one document with this field
         #we assume that the field is present in the collection
@@ -108,15 +111,15 @@ class orm_mongodb(orm.orm_template):
                                   %s of collection %s' % (def_fields,
                                                           self._table))
             def_values = self.default_get(cr, 1, def_fields)
-            collection.update({},
-                              {'$set': def_values},
-                              upsert=False,
-                              manipulate=False,
-                              w=1,
-                              multi=True)
-
-        if db.error():
-            raise except_orm('MongoDB update defaults error', db.error())
+            try:
+                collection.update({},
+                                  {'$set': def_values},
+                                  upsert=False,
+                                  manipulate=False,
+                                  w=1,
+                                  multi=True)
+            except Exception as e:
+                raise except_orm('MongoDB update defaults error', '{}'.format(e))
 
     def __init__(self, cr):
         super(orm_mongodb, self).__init__(cr)
@@ -401,12 +404,12 @@ class orm_mongodb(orm.orm_template):
                     })
 
         #bulk update with modifiers, and safe mode
-        collection.update({'id': {'$in': ids}},
-                          {'$set': vals},
-                          False, False, True, True)
-
-        if db.error():
-            raise except_orm('MongoDB update error', db.error())
+        try:
+            collection.update({'id': {'$in': ids}},
+                              {'$set': vals},
+                              False, False, True, True, w=1)
+        except Exception as e:
+            raise except_orm('MongoDB update error', '{}'.format(e))
 
         return True
 
