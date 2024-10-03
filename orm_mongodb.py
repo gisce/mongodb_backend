@@ -55,7 +55,7 @@ class orm_mongodb(orm.orm_template):
 
     def _create_index_field(self, collection, field_name, background=True, **kwargs):
         try:
-            res = collection.create_index(field_name, background=True, **kwargs)
+            res = collection.create_index(field_name, background=background, **kwargs)
         except Exception as e:
             raise except_orm('MongoDB create id field index error', '{}'.format(e))
 
@@ -559,10 +559,10 @@ class orm_mongodb(orm.orm_template):
         # Remove binary fields (files in gridfs)
         self.unlink_binary_gridfs_fields(collection, ids)
         #Remove with safe mode
-        collection.remove({'id': {'$in': ids}}, True)
-
-        if db.error():
-            raise except_orm('MongoDB unlink error', db.error())
+        try:
+            collection.remove({'id': {'$in': ids}}, True, w=1)
+        except Exception as e:
+            raise except_orm('MongoDB unlink error', '{}'.format(e))
 
         return True
 
