@@ -10,7 +10,7 @@ concurrency:
 
 
 jobs:
-  run-tests:
+  run-tests-5:
     if: github.event_name == 'pull_request' && github.event.label.name == 'to be merged'
     runs-on: ubuntu-latest
     strategy:
@@ -83,6 +83,7 @@ jobs:
           pip install -r src/erp/requirements.txt
           pip install -r src/erp/requirements-dev.txt
           pip install pymongo==3.13.0
+          pip install rq-scheduler
           pip install destral
 
       - name: Link addons
