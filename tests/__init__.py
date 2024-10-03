@@ -92,7 +92,8 @@ class MongoModelTest(osv_mongodb.osv_mongodb):
     _columns = {
         'name': fields.char('Name', size=64),
         'other_name': fields.char('Other name', size=64),
-        'boolean_field': fields.boolean('Boolean Field', size=64)
+        'boolean_field': fields.boolean('Boolean Field', size=64),
+        'integer_field_with_index': fields.integer('Integer Field', select=1)
     }
 
 
@@ -215,3 +216,20 @@ class MongoDBORMTests(testing.MongoDBTestCase):
 
             m_ids = mmt_obj.search(cursor, uid, [('boolean_field', '=', False)])
             expect(len(m_ids)).to(be_above(0))
+
+    def test_create_index_from_select(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        # Create test
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': 'Foo',
+            'other_name': 'Bar',
+            'boolean_field': True,
+            'integer_field_with_index': 8
+        })
+        from mongodb_backend.mongodb2 import mdbpool
+        db = mdbpool.get_db()
+        collection = db.mongomodel_test
+        self.assertIn('integer_field_with_index_1', collection.index_information())
