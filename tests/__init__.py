@@ -233,3 +233,36 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         db = mdbpool.get_db()
         collection = db.mongomodel_test
         self.assertIn('integer_field_with_index_1', collection.index_information())
+
+    def test_orm_operation(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        import uuid
+        unique_ident = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident,
+            'other_name': 'Bar',
+            'boolean_field': True,
+            'integer_field_with_index': 8
+        })
+        self.assertTrue(mmt_id)
+
+        # Test search
+        found_ids = mmt_obj.search(cursor, uid, [('name', '=', unique_ident)])
+        self.assertTrue(found_ids)
+        self.assertIn(mmt_id, found_ids)
+        self.assertEqual(len(found_ids), 1)
+
+        # Test write/read
+        mmt_obj.write(cursor, uid, found_ids, {'other_name': unique_ident})
+        field_content = mmt_obj.read(cursor, uid, mmt_id, ['other_name'])['other_name']
+        self.assertEqual(field_content, unique_ident)
+
+        # Test Unlink
+        mmt_obj.unlink(cursor, uid, found_ids)
+        found_ids = mmt_obj.search(cursor, uid, [('name', '=', unique_ident)])
+        self.assertFalse(found_ids)
