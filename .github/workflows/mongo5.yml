@@ -82,8 +82,8 @@ jobs:
         run: |
           pip install -r src/erp/requirements.txt
           pip install -r src/erp/requirements-dev.txt
+          pip install -r src/erp/server/bin/addons/base/requirements.txt
           pip install pymongo==3.13.0
-          pip install rq-scheduler
           pip install destral
 
       - name: Link addons
