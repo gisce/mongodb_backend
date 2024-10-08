@@ -5,6 +5,7 @@ from osv import osv, fields
 from mongodb_backend import testing, osv_mongodb
 from expects import *
 from destral.transaction import Transaction
+from mongodb_backend import fields as mdb_fields
 
 from mongodb_backend import mongodb2
 from mongodb_backend import orm_mongodb
@@ -93,7 +94,17 @@ class MongoModelTest(osv_mongodb.osv_mongodb):
         'name': fields.char('Name', size=64),
         'other_name': fields.char('Other name', size=64),
         'boolean_field': fields.boolean('Boolean Field', size=64),
-        'integer_field_with_index': fields.integer('Integer Field', select=1)
+        'integer_field_with_index': fields.integer('Integer Field', select=1),
+        'file_example': fields.binary('test')
+    }
+
+
+class NoMongoModelTestWithGridFs(osv.osv):
+    _name = 'no.mongomodel.test.with.gridfs'
+
+    _columns = {
+        'name': fields.char('Name', size=64),
+        'file_example': mdb_fields.gridfs('test')
     }
 
 
@@ -136,7 +147,13 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         self.txn = Transaction().start(self.database)
 
     def tearDown(self):
+        self.cleanup()
         self.txn.stop()
+
+    def cleanup(self):
+        from mongodb_backend.mongodb2 import mdbpool
+        db = mdbpool.get_db()
+        db.drop_collection("mongomodel_test")
 
     def create_model(self):
         cursor = self.txn.cursor
@@ -266,3 +283,58 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         mmt_obj.unlink(cursor, uid, found_ids)
         found_ids = mmt_obj.search(cursor, uid, [('name', '=', unique_ident)])
         self.assertFalse(found_ids)
+
+    def test_binary(self):
+        from addons import get_module_resource
+        import uuid
+        from base64 import b64encode, b64decode
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+
+        unique_ident = '{}'.format(uuid.uuid4())
+
+        image_path = get_module_resource(
+            'mongodb_backend', 'tests', 'fixtures', '15796004.png'
+        )
+
+        with open(image_path, 'rb') as image_fd:
+            fb = image_fd.read()
+
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident,
+            'other_name': 'Bar',
+            'boolean_field': True,
+            'integer_field_with_index': 8
+        })
+        mmt_obj.write(cursor, uid, [mmt_id], {'file_example': b64encode(fb)})
+        res_file = mmt_obj.read(cursor, uid, mmt_id, ['file_example'])['file_example']
+        self.assertEqual(b64decode(res_file), fb)
+
+    def test_gridfs(self):
+        from addons import get_module_resource
+        from base64 import b64encode, b64decode
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        NoMongoModelTestWithGridFs()
+        osv.class_pool[NoMongoModelTestWithGridFs._name].createInstance(
+            self.openerp.pool, 'mongodb_backend', cursor
+        )
+        mmt_obj = self.openerp.pool.get(NoMongoModelTestWithGridFs._name)
+        mmt_obj._auto_init(cursor)
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': 'test'
+        })
+
+        image_path = get_module_resource(
+            'mongodb_backend', 'tests', 'fixtures', '15796004.png'
+        )
+
+        with open(image_path, 'rb') as image_fd:
+            fb = image_fd.read()
+
+        mmt_obj.write(cursor, uid, [mmt_id], {'file_example': b64encode(fb)})
+        res_file = mmt_obj.read(cursor, uid, mmt_id, ['file_example'])['file_example']
+        self.assertEqual(b64decode(res_file), fb)
+
