@@ -96,7 +96,7 @@ class MongoModelTest(osv_mongodb.osv_mongodb):
         'other_name': fields.char('Other name', size=64),
         'boolean_field': fields.boolean('Boolean Field', size=64),
         'integer_field_with_index': fields.integer('Integer Field', select=1),
-        'file_example': fields.binary('test'),
+        'file_example': fields.binary('test', gridfs=True),
         'date_field': fields.date('Date Field'),
         'datetime_field': fields.datetime('Datetime Field'),
         'function_field': fields.function(
@@ -299,7 +299,8 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         expected_content = {
             'name': unique_ident, 'date_field': '2024-01-01',
             'boolean_field': True, 'integer_field_with_index': 8,
-            'other_name': unique_ident, 'id': mmt_id, 'function_field': 'test', 'function_field_multi': 'test'
+            'other_name': unique_ident, 'id': mmt_id, 'function_field': 'test',
+            'function_field_multi': 'test'
         }
         self.assertEqual(all_content, expected_content)
 
@@ -331,8 +332,12 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             'name': unique_ident,
             'other_name': 'Bar',
             'boolean_field': True,
-            'integer_field_with_index': 8
+            'integer_field_with_index': 8,
+            'file_example': b64encode(fb)
         })
+        res_file = mmt_obj.read(cursor, uid, mmt_id, ['file_example'])['file_example']
+        self.assertEqual(b64decode(res_file), fb)
+
         mmt_obj.write(cursor, uid, [mmt_id], {'file_example': b64encode(fb)})
         res_file = mmt_obj.read(cursor, uid, mmt_id, ['file_example'])['file_example']
         self.assertEqual(b64decode(res_file), fb)
@@ -348,9 +353,6 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         )
         mmt_obj = self.openerp.pool.get(NoMongoModelTestWithGridFs._name)
         mmt_obj._auto_init(cursor)
-        mmt_id = mmt_obj.create(cursor, uid, {
-            'name': 'test'
-        })
 
         image_path = get_module_resource(
             'mongodb_backend', 'tests', 'fixtures', '15796004.png'
@@ -358,6 +360,11 @@ class MongoDBORMTests(testing.MongoDBTestCase):
 
         with open(image_path, 'rb') as image_fd:
             fb = image_fd.read()
+
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': 'test',
+            'file_example': b64encode(fb)
+        })
 
         mmt_obj.write(cursor, uid, [mmt_id], {'file_example': b64encode(fb)})
         res_file = mmt_obj.read(cursor, uid, mmt_id, ['file_example'])['file_example']
