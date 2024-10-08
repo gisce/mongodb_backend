@@ -9,6 +9,7 @@ from mongodb_backend import fields as mdb_fields
 
 from mongodb_backend import mongodb2
 from mongodb_backend import orm_mongodb
+import datetime
 
 
 class TestTranslateDomain(unittest.TestCase):
@@ -95,7 +96,9 @@ class MongoModelTest(osv_mongodb.osv_mongodb):
         'other_name': fields.char('Other name', size=64),
         'boolean_field': fields.boolean('Boolean Field', size=64),
         'integer_field_with_index': fields.integer('Integer Field', select=1),
-        'file_example': fields.binary('test')
+        'file_example': fields.binary('test'),
+        'date_field': fields.date('Date Field'),
+        'datetime_field': fields.datetime('Datetime Field')
     }
 
 
@@ -338,3 +341,70 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         res_file = mmt_obj.read(cursor, uid, mmt_id, ['file_example'])['file_example']
         self.assertEqual(b64decode(res_file), fb)
 
+    def test_dates(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        import uuid
+
+        expected_date_str = '2022-12-31'
+        expected_datetime_str = '2022-12-31 12:00:00'
+
+        unique_ident2 = '{}'.format(uuid.uuid4())
+
+        mmt2_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident2,
+            'date_field': expected_date_str,
+            'datetime_field': expected_datetime_str
+        })
+
+        res2 = mmt_obj.read(cursor, uid, mmt2_id, ['date_field', 'datetime_field'])
+        self.assertEqual(res2['date_field'], expected_date_str)
+        self.assertEqual(res2['datetime_field'], expected_datetime_str)
+
+        expected_datetime_str_2 = '2023-12-31 00:00:00'
+        write_value = '2023-12-31'
+
+        mmt_obj.write(cursor, uid, [mmt2_id], {'datetime_field': write_value})
+        res2 = mmt_obj.read(cursor, uid, mmt2_id, ['datetime_field'])
+        self.assertEqual(res2['datetime_field'], expected_datetime_str_2)
+
+
+    def test_export_data(self):
+        from base64 import b64encode, b64decode
+        from io import BytesIO
+        import pandas as pd
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        import uuid
+        unique_ident = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident,
+            'other_name': 'Bar',
+            'boolean_field': True,
+            'integer_field_with_index': 8
+        })
+        unique_ident2 = '{}'.format(uuid.uuid4())
+        mmt2_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident2,
+            'other_name': 'Bar2',
+            'boolean_field': False,
+            'integer_field_with_index': 4
+        })
+        res_csv = mmt_obj.export_data2(
+            cursor, uid, [], 100, ['name', 'other_name', 'boolean_field'], 'csv', {'prefetch': False}
+        )
+        csv_f = BytesIO(b64decode(res_csv['datas']))
+        res_excel = mmt_obj.export_data2(
+            cursor, uid, [], 100, ['name', 'other_name', 'boolean_field'], 'xlsx', {'prefetch': False}
+        )
+        xlsx_f = BytesIO(b64decode(res_excel['datas']))
+        df_csv = pd.read_csv(csv_f, sep=';')
+        df_xlsx = pd.read_excel(xlsx_f)
+        self.assertEqual(df_csv['Name'].tolist(), [unique_ident, unique_ident2])
+        self.assertEqual(df_xlsx['Name'].tolist(), [unique_ident, unique_ident2])
