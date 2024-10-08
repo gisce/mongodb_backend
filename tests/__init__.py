@@ -98,7 +98,21 @@ class MongoModelTest(osv_mongodb.osv_mongodb):
         'integer_field_with_index': fields.integer('Integer Field', select=1),
         'file_example': fields.binary('test'),
         'date_field': fields.date('Date Field'),
-        'datetime_field': fields.datetime('Datetime Field')
+        'datetime_field': fields.datetime('Datetime Field'),
+        'function_field': fields.function(
+            lambda self, cursor, uid, ids, *a, **k:
+            {_id: 'test' for _id in (ids if isinstance(ids, (list, tuple)) else [ids])},
+            string='func', type='text', method=True, store=False
+        ),
+        'function_field_multi': fields.function(
+            lambda self, cursor, uid, ids, *a, **k:
+            {_id: {'function_field_multi': 'test'} for _id in (ids if isinstance(ids, (list, tuple)) else [ids])},
+            string='func mult', type='text', method=True, store=False, multi='test'
+        ),
+    }
+    _defaults = {
+        'date_field': lambda *a: '2024-01-01',
+        'integer_field_with_index': lambda *a: 1
     }
 
 
@@ -281,6 +295,14 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         mmt_obj.write(cursor, uid, found_ids, {'other_name': unique_ident})
         field_content = mmt_obj.read(cursor, uid, mmt_id, ['other_name'])['other_name']
         self.assertEqual(field_content, unique_ident)
+        all_content = mmt_obj.read(cursor, uid, mmt_id, None)
+        expected_content = {
+            'name': unique_ident, 'date_field': '2024-01-01',
+            'boolean_field': True, 'integer_field_with_index': 8,
+            'other_name': unique_ident, 'id': mmt_id, 'function_field': 'test', 'function_field_multi': 'test'
+        }
+        self.assertEqual(all_content, expected_content)
+
 
         # Test Unlink
         mmt_obj.unlink(cursor, uid, found_ids)
@@ -370,7 +392,6 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         res2 = mmt_obj.read(cursor, uid, mmt2_id, ['datetime_field'])
         self.assertEqual(res2['datetime_field'], expected_datetime_str_2)
 
-
     def test_export_data(self):
         from base64 import b64encode, b64decode
         from io import BytesIO
@@ -408,3 +429,59 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         df_xlsx = pd.read_excel(xlsx_f)
         self.assertEqual(df_csv['Name'].tolist(), [unique_ident, unique_ident2])
         self.assertEqual(df_xlsx['Name'].tolist(), [unique_ident, unique_ident2])
+
+    def test_order(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        import uuid
+        unique_ident = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident,
+            'other_name': 'Bar',
+            'boolean_field': True,
+            'integer_field_with_index': 7
+        })
+
+        unique_ident2 = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id_2 = mmt_obj.create(cursor, uid, {
+            'name': unique_ident2,
+            'other_name': 'Bar1',
+            'integer_field_with_index': 8
+        })
+
+        unique_ident3 = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id_3 = mmt_obj.create(cursor, uid, {
+            'name': unique_ident3,
+            'other_name': 'Bar2',
+            'integer_field_with_index': 5
+        })
+
+        unique_ident4 = '{}'.format(uuid.uuid4())
+
+        mmt_id_4 = mmt_obj.create(cursor, uid, {
+            'name': unique_ident4,
+            'other_name': 'Bar4',
+            'integer_field_with_index': 5
+        })
+        res = mmt_obj.search(cursor, uid, [])
+        self.assertEqual(res, [mmt_id, mmt_id_2, mmt_id_3, mmt_id_4])
+
+        res = mmt_obj.search(cursor, uid, [('name', '!=', False)])
+        self.assertEqual(res, [mmt_id, mmt_id_2, mmt_id_3, mmt_id_4])
+
+        res = mmt_obj.search(cursor, uid, [('name', '!=', False)], order='integer_field_with_index desc')
+        self.assertEqual(res, [mmt_id_2, mmt_id, mmt_id_4, mmt_id_3])
+
+        res = mmt_obj.search(cursor, uid, [('name', '!=', False)], order='integer_field_with_index asc')
+        self.assertEqual(res, [mmt_id_3, mmt_id_4, mmt_id, mmt_id_2])
+
+        res = mmt_obj.search(cursor, uid, [('name', '!=', False)], order='integer_field_with_index asc, other_name desc')
+        self.assertEqual(res, [mmt_id_4, mmt_id_3, mmt_id, mmt_id_2])
