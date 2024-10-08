@@ -160,9 +160,12 @@ class orm_mongodb(orm.orm_template):
         if binary_fields:
             for val in vals:
                 for binary_field in binary_fields_to_read:
-                    val[binary_field] = self.transform_binary_gridfs_field(
-                        binary_field, val[binary_field], 'read'
-                    )
+                    if binary_field not in val:
+                        continue
+                    else:
+                        val[binary_field] = self.transform_binary_gridfs_field(
+                            binary_field, val[binary_field], 'read'
+                        )
 
     def write_binary_gridfs_fields(self, val):
         binary_fields = self.get_binary_gridfs_fields()
