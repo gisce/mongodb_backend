@@ -24,7 +24,7 @@ import copy
 
 from osv.osv import module_class_list, module_list, class_pool
 from . import orm_mongodb
-
+import six
 
 class osv_mongodb(orm_mongodb.orm_mongodb):
     #__metaclass__ = inheritor
@@ -63,6 +63,8 @@ class osv_mongodb(orm_mongodb.orm_mongodb):
             if cls in parent_class.mro():
                 cls = parent_class
             else:
+                if six.PY2 and isinstance(name, six.text_type):
+                    name = six.binary_type(name)
                 cls = type(name, (cls, parent_class), nattr)
         obj = object.__new__(cls)
         obj.__init__(pool, cr)
