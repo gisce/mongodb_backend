@@ -567,4 +567,4 @@ class MongoDBORMTests(testing.MongoDBTestCase):
                 ('date_field', '>', '2025-05-05'), ('date_field', '<', '2025-05-05')
             ]
         )
-        self.assertEqual(res, [mmt_id])
+        self.assertEqual(res, [])
