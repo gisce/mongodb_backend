@@ -224,6 +224,13 @@ class orm_mongodb(orm.orm_template):
                 arg[2] = self.transform_date_field(arg[0],
                                                    arg[2],
                                                    'write')
+
+                if self._columns[arg[0]]._type == 'datetime' and len(arg[2]) == 10:
+                    if arg[1] in ('>', '>='):
+                        arg[2] += ' 00:00:00'
+                    elif arg[1] in ('<', '<='):
+                        arg[2] += ' 23:59:59'
+
             if arg[0] in bool_fields:
                 arg[2] = bool(arg[2])
 
