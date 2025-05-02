@@ -492,3 +492,79 @@ class MongoDBORMTests(testing.MongoDBTestCase):
 
         res = mmt_obj.search(cursor, uid, [('name', '!=', False)], order='integer_field_with_index asc, other_name desc')
         self.assertEqual(res, [mmt_id_4, mmt_id_3, mmt_id, mmt_id_2])
+
+    def test_datetime_search(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        import uuid
+        unique_ident = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident,
+            'other_name': 'Bar',
+            'datetime_field': '2025-05-05 02:00:00',
+            'date_field': '2025-05-05'
+        })
+
+        # Test for distinct dates cases
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('datetime_field', '<', '2025-05-06')])
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('datetime_field', '>', '2025-05-04')])
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('datetime_field', '<=', '2025-05-06')])
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('datetime_field', '>=', '2025-05-04')])
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('date_field', '<', '2025-05-06')])
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('date_field', '>', '2025-05-04')])
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('date_field', '<=', '2025-05-06')])
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(cursor, uid, [('name', '=', unique_ident), ('date_field', '>=', '2025-05-04')])
+        self.assertEqual(res, [mmt_id])
+
+        # Tests for same date range
+
+        res = mmt_obj.search(
+            cursor, uid, [
+                ('name', '=', unique_ident),
+                ('datetime_field', '>=', '2025-05-05'), ('datetime_field', '<=', '2025-05-05')
+            ]
+        )
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(
+            cursor, uid, [
+                ('name', '=', unique_ident),
+                ('datetime_field', '>', '2025-05-05'), ('datetime_field', '<', '2025-05-05')
+            ]
+        )
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(
+            cursor, uid, [
+                ('name', '=', unique_ident),
+                ('date_field', '>=', '2025-05-05'), ('date_field', '<=', '2025-05-05')
+            ]
+        )
+        self.assertEqual(res, [mmt_id])
+
+        res = mmt_obj.search(
+            cursor, uid, [
+                ('name', '=', unique_ident),
+                ('date_field', '>', '2025-05-05'), ('date_field', '<', '2025-05-05')
+            ]
+        )
+        self.assertEqual(res, [mmt_id])
