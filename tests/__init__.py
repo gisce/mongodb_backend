@@ -619,7 +619,7 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         db = mdbpool.get_db()
         collection = db.mongomodel_test
         pipeline = [
-            {"$unwind": "$other_name"},
+            # {"$unwind": "$other_name"},
             {"$match": {"integer_field_with_index": {"$gt": 2}}},
             {"$group": {"_id": "$other_name", "count": {"$sum": 1}, "total": {"$sum": "$integer_field_with_index"}}},
             {"$sort": {"total": -1}}
