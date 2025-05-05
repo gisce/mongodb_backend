@@ -484,7 +484,11 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         res = mmt_obj.search(cursor, uid, [('name', '!=', False)])
         self.assertEqual(res, [mmt_id, mmt_id_2, mmt_id_3, mmt_id_4])
 
-        res = mmt_obj.search(cursor, uid, [('name', '!=', False)], order='integer_field_with_index desc')
+        # mmt_id_4 and mmt_id_3 has de same integer_field_with_index.
+        # On mongo if id desc not provided returns mmt_id_2, mmt_id, mmt_id_4, mmt_id_3
+        # but in ferretDB returns mmt_id_2, mmt_id, mmt_id_3, mmt_id_4
+        # To avoid discordance we force id desc as secondary order
+        res = mmt_obj.search(cursor, uid, [('name', '!=', False)], order='integer_field_with_index desc, id desc')
         self.assertEqual(res, [mmt_id_2, mmt_id, mmt_id_4, mmt_id_3])
 
         res = mmt_obj.search(cursor, uid, [('name', '!=', False)], order='integer_field_with_index asc')
@@ -568,3 +572,60 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             ]
         )
         self.assertEqual(res, [])
+
+    def test_aggregate_pymongo(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        import uuid
+        unique_ident = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id = mmt_obj.create(cursor, uid, {
+            'name': unique_ident,
+            'other_name': 'Bar',
+            'boolean_field': True,
+            'integer_field_with_index': 7
+        })
+
+        unique_ident2 = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id_2 = mmt_obj.create(cursor, uid, {
+            'name': unique_ident2,
+            'other_name': 'Bar',
+            'integer_field_with_index': 8
+        })
+
+        unique_ident3 = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id_3 = mmt_obj.create(cursor, uid, {
+            'name': unique_ident3,
+            'other_name': 'Bar2',
+            'integer_field_with_index': 5
+        })
+
+        unique_ident4 = '{}'.format(uuid.uuid4())
+
+        # Test create
+        mmt_id_3 = mmt_obj.create(cursor, uid, {
+            'name': unique_ident4,
+            'other_name': 'Bar2',
+            'integer_field_with_index': 2
+        })
+        from mongodb_backend.mongodb2 import mdbpool
+        db = mdbpool.get_db()
+        collection = db.mongomodel_test
+        pipeline = [
+            {"$unwind": "$other_name"},
+            {"$match": {"integer_field_with_index": {"$gt": 2}}},
+            {"$group": {"_id": "$other_name", "count": {"$sum": 1}, "total": {"$sum": "$integer_field_with_index"}}},
+            {"$sort": {"total": -1}}
+        ]
+        res = list(collection.aggregate(pipeline))
+        self.assertEqual(
+            res,
+            [{"_id": "Bar", "total": 15, "count": 2}, {"_id": "Bar2", "total": 5, "count": 1}]
+        )
