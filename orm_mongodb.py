@@ -19,7 +19,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 from osv import orm, fields
 from osv.orm import except_orm
 import netsvc
@@ -507,24 +507,15 @@ class orm_mongodb(orm.orm_template):
 
     def search(self, cr, user, args, offset=0, limit=0, order=None,
             context=None, count=False):
-        #Make a copy of args for working
-        #Domain has to be list of lists
-        tmp_args = [isinstance(arg, tuple) and list(arg)
-                    or arg for arg in args]
-        collection = mdbpool.get_collection(self._table)
-        self.search_trans_fields(tmp_args)
+        import copy
 
-        new_args = mdbpool.translate_domain(tmp_args)
-        # Implement exact match for fields char which defaults to ilike
-        for k in new_args:
-            field = self._columns.get(k)
-            if not field:
-                pass
-            if getattr(field, 'exact_match', False):
-                if isinstance(new_args[k], re._pattern_type):
-                    new_args[k] = new_args[k].pattern.lstrip('.*').rstrip('.*')
-        if not context:
+        if args is None:
+            args = []
+        if context is None:
             context = {}
+
+        new_args = mdbpool.translate_domain(copy.deepcopy(args), orm_obj=self)
+
         self.pool.get('ir.model.access').check(cr, user,
                         self._name, 'read', context=context)
         #In very large collections when no args
@@ -533,6 +524,8 @@ class orm_mongodb(orm.orm_template):
         #has an individual index and works very fast
         if not args:
             order = 'id'
+
+        collection = mdbpool.get_collection(self._table)
 
         if count:
             return collection.find(
