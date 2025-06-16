@@ -818,7 +818,11 @@ class MongoDomainCombinations(testing.MongoDBTestCase):
         #  < '2025-05-06' -> 2025-05-06 23:59:59  (include r2)
         dom = [('moment', '<', '2025-05-06')]
         ids = self.obj.search(c, u, dom)
-        self.assertEqual(set(ids), {self.r1, self.r3})
+        # This is a rare case. With https://github.com/gisce/mongodb_backend/pull/49
+        # 2025-05-06 is treated as 2025-05-06 23:59:59 and 2025-05-06 20:00:00
+        # in included in the search result.
+        # self.assertEqual(set(ids), {self.r1, self.r3})
+        self.assertEqual(set(ids), {self.r1, self.r2, self.r3})
 
         # >= '2025-05-06' -> 2025-05-06 00:00:00 (only r2)
         dom = [('moment', '>=', '2025-05-06')]
