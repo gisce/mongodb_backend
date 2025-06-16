@@ -1,3 +1,4 @@
+from __future__ import absolute_import, unicode_literals
 import unittest
 import re
 
@@ -53,14 +54,20 @@ class TestTranslateDomain(unittest.TestCase):
         self.assertEqual(res, {'_id': {'$gt': 10}})
 
         res = mdbconn.translate_domain([('_id', '>', 10), ('_id', '<', 15)])
-        self.assertEqual(res, {'_id': {'$gt': 10, '$lt': 15}})
+        self.assertEqual(res, {'$and': [{'_id': {'$gt': 10}}, {'_id': {'$lt': 15}}]})
 
         res = mdbconn.translate_domain([
             ('_id', '>', 10),
             ('_id', '<', 15),
             ('name', 'ilike', '%ol%')
         ])
-        self.assertEqual(res, {'_id': {'$gt': 10, '$lt': 15}, 'name': re.compile('.*ol.*', re.IGNORECASE)})
+        self.assertEqual(res, {
+            '$and': [
+                {'_id': {'$gt': 10}},
+                {'_id': {'$lt': 15}},
+                {'name': re.compile('.*ol.*', re.IGNORECASE)}
+            ]
+        })
 
 
 def test_compute_order_parsing(self):
@@ -123,6 +130,33 @@ class NoMongoModelTestWithGridFs(osv.osv):
         'name': fields.char('Name', size=64),
         'file_example': mdb_fields.gridfs('test')
     }
+
+class TestModel(osv_mongodb.osv_mongodb):
+    _name = 'comprehensive.domain.model'
+
+    _columns = {
+        'name': fields.char('Name', size=64, exact_match=True),
+        'num':  fields.integer('Numeric'),
+        'flag': fields.boolean('Flag'),
+        'day':  fields.date('Day'),
+        'moment': fields.datetime('Moment'),
+    }
+    _defaults = {
+        'flag': lambda *a: False
+    }
+
+def _mk(model, cursor, uid, **vals):
+    import uuid
+    _vals = {
+        'name': '{}'.format(uuid.uuid4()),
+        'num':  0,
+        'day':  '2024-01-01',
+        'moment': '2024-01-01 00:00:00',
+        'flag': False
+    }
+    _vals.update(vals)
+    _id = model.create(cursor, uid, _vals)
+    return _id, _vals
 
 
 class MongoDBBackendTest(testing.MongoDBTestCase):
@@ -629,3 +663,181 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             res,
             [{"_id": "Bar", "total": 15, "count": 2}, {"_id": "Bar2", "total": 5, "count": 1}]
         )
+
+
+class TranslateDomainComprehensive(testing.MongoDBTestCase):
+
+    def setUp(self):
+        self.mdb = mongodb2.MDBConn()
+
+    def _assert(self, domain, expected):
+        res = self.mdb.translate_domain(domain)
+        self.assertEqual(res, expected)
+
+    def test_simple_operators(self):
+        self._assert([('x', '=', 5)],            {'x': {'$eq': 5}})
+        self._assert([('x', '!=', 5)],           {'x': {'$ne': 5}})
+        self._assert([('x', '>', 5)],            {'x': {'$gt': 5}})
+        self._assert([('x', '>=', 5)],           {'x': {'$gte': 5}})
+        self._assert([('x', '<', 5)],            {'x': {'$lt': 5}})
+        self._assert([('x', '<=', 5)],           {'x': {'$lte': 5}})
+        self._assert([('x', 'in', [1, 2])],      {'x': {'$in': [1, 2]}})
+        self._assert([('x', 'not in', [1, 2])],  {'x': {'$nin': [1, 2]}})
+
+    def test_like_variants(self):
+        self._assert([('name', 'like', 'fo%')],
+                     {'name': {'$regex': re.compile('fo.*')}})
+        self._assert([('name', 'not like', '%fo%')],
+                     {'name': {'$not': re.compile('.*fo.*')}})
+        self._assert([('name', 'ilike', '%fo%')],
+                     {'name': re.compile('.*fo.*', re.I)})
+        self._assert([('name', 'not ilike', '%fo%')],
+                     {'name': {'$not': re.compile('.*fo.*', re.I)}})
+
+    def test_and_or_not_flat(self):
+        dom = [
+            '|',
+              ('a', '=', 1),
+              ('b', '>', 2)
+        ]
+        exp = {'$or': [{'a': {'$eq': 1}}, {'b': {'$gt': 2}}]}
+        self._assert(dom, exp)
+
+        dom = [
+            '&',
+              ('a', '=', 1),
+              ('b', '<', 5)
+        ]
+        exp = {'$and': [{'a': {'$eq': 1}}, {'b': {'$lt': 5}}]}
+        self._assert(dom, exp)
+
+        dom = ['!', ('a', '=', 1)]
+        exp = {'$nor': [{'a': {'$eq': 1}}]}
+        self._assert(dom, exp)
+
+    def test_and_implicit_multiple_leaves(self):
+        dom = [('a', '=', 1), ('b', '>', 2)]
+        exp = {'$and': [{'a': {'$eq': 1}}, {'b': {'$gt': 2}}]}
+        self._assert(dom, exp)
+
+    def test_nested_sub_lists(self):
+        dom = [
+            '|',
+              ('a', '=', 1),
+              [
+                  '&',
+                    ('b', '>', 2),
+                    ('c', '<', 10)
+              ]
+        ]
+        exp = {
+            '$or': [
+                {'a': {'$eq': 1}},
+                {'$and': [{'b': {'$gt': 2}}, {'c': {'$lt': 10}}]}
+            ]
+        }
+        self._assert(dom, exp)
+
+
+class MongoDomainCombinations(testing.MongoDBTestCase):
+
+    def setUp(self):
+        self.tx = Transaction().start(self.database)
+        cursor = self.tx.cursor
+        TestModel()
+        osv.class_pool[TestModel._name].createInstance(
+            self.openerp.pool, 'mongodb_backend', cursor
+        )
+        self.obj = self.openerp.pool.get(TestModel._name)
+        self.obj._auto_init(cursor)
+
+        uid = self.tx.user
+        self.r1, v1 = _mk(self.obj, cursor, uid,
+                          name='FOO', num=1, flag=False,
+                          day='2025-05-05', moment='2025-05-05 02:00:00')
+        self.r2, v2 = _mk(self.obj, cursor, uid,
+                          name='BAR', num=7, flag=True,
+                          day='2025-05-06', moment='2025-05-06 20:00:00')
+        self.r3, v3 = _mk(self.obj, cursor, uid,
+                          name='BAZ', num=5, flag=False,
+                          day='2025-05-04', moment='2025-05-04 23:00:00')
+
+    def tearDown(self):
+        from mongodb_backend.mongodb2 import mdbpool
+        mdbpool.get_db().drop_collection("comprehensive_domain_model")
+        self.tx.stop()
+
+    # --------------------------------------------------------------
+    #  BOOLEAN and EXACT_MATCH
+    # --------------------------------------------------------------
+    def test_boolean_and_exact_match(self):
+        c, u = self.tx.cursor, self.tx.user
+
+        # exact_match: debe ser coincidencia exacta (no regex)
+        ids = self.obj.search(c, u, [('name', '=', 'FOO')])
+        self.assertEqual(ids, [self.r1])
+
+        # booleano
+        ids = self.obj.search(c, u, [('flag', '=', True)])
+        self.assertEqual(set(ids), {self.r2})
+
+        ids = self.obj.search(c, u, [('flag', '=', False)])
+        self.assertEqual(set(ids), {self.r1, self.r3})
+
+    # --------------------------------------------------------------
+    #  Complex logic operators
+    # --------------------------------------------------------------
+    def test_or_and_not(self):
+        c, u = self.tx.cursor, self.tx.user
+
+        dom = [
+            '|',
+              ('name', '=', 'FOO'),
+              ('num', '>', 6)
+        ]
+        ids = self.obj.search(c, u, dom)
+        self.assertEqual(set(ids), {self.r1, self.r2})
+
+        dom = [
+            '&',
+              ('num', '>', 1),
+              ('num', '<', 6)
+        ]
+        ids = self.obj.search(c, u, dom)
+        self.assertEqual(set(ids), {self.r3})
+
+        dom = ['!', ('name', 'ilike', '%A%')]
+        ids = self.obj.search(c, u, dom)
+        self.assertEqual(set(ids), {self.r1})
+
+    # --------------------------------------------------------------
+    #  Dates and Datetimes
+    # --------------------------------------------------------------
+    def test_date_range_implicit_time(self):
+        c, u = self.tx.cursor, self.tx.user
+        #  < '2025-05-06' -> 2025-05-06 23:59:59  (include r2)
+        dom = [('moment', '<', '2025-05-06')]
+        ids = self.obj.search(c, u, dom)
+        self.assertEqual(set(ids), {self.r1, self.r3})
+
+        # >= '2025-05-06' -> 2025-05-06 00:00:00 (only r2)
+        dom = [('moment', '>=', '2025-05-06')]
+        ids = self.obj.search(c, u, dom)
+        self.assertEqual(set(ids), {self.r2})
+
+    # --------------------------------------------------------------
+    # NESTED AND IMPLICIT MULTI-SHEET JOIN
+    # --------------------------------------------------------------
+    def test_nested_combination(self):
+        c, u = self.tx.cursor, self.tx.user
+        dom = [
+            '|',
+              ('name', '=', 'FOO'),
+              [
+                  '&',
+                    ('num', '>', 4),
+                    ('flag', '=', True)
+              ]
+        ]
+        ids = self.obj.search(c, u, dom)
+        self.assertEqual(set(ids), {self.r1, self.r2})
