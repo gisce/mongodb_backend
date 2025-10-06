@@ -83,6 +83,8 @@ class orm_mongodb(orm.orm_template):
         except pymongo.errors.OperationFailure as e:
             if e.details and "An existing index has the same name as the requested index" in e.details.get("errmsg", " "):
                 pass
+            elif e.details and "An equivalent index" in e.details.get("errmsg", " "):
+                pass
             elif e.details and "already exists with different options" in e.details.get("errmsg", " "):
                 pass
             else:
