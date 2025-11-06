@@ -649,11 +649,12 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             uid = txn.user
             
             # Initialize the model with active field
-            pool = self.openerp.pool
-            if MongoModelTestWithActive._name not in pool._pool:
-                obj = MongoModelTestWithActive.createInstance(pool, 'mongodb_backend', cursor)
-            
-            mmt_active_obj = pool.get(MongoModelTestWithActive._name)
+            MongoModelTestWithActive()
+            osv.class_pool[MongoModelTestWithActive._name].createInstance(
+                self.openerp.pool, 'mongodb_backend', cursor
+            )
+            mmt_active_obj = self.openerp.pool.get(MongoModelTestWithActive._name)
+            mmt_active_obj._auto_init(cursor)
             
             import uuid
             # Create an active record
