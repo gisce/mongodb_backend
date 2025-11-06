@@ -583,9 +583,16 @@ class orm_mongodb(orm.orm_template):
         # nothing to check in schema free...
         pass
 
+    @isolation(readonly=True, isolation_level='repeatable_read')
     def name_get(self, cr, user, ids, context=None):
-        result = self.read(cr, user, ids, [self._rec_name])
-        return [(x['id'], x[self._rec_name]) for x in result]
+        if not context:
+            context = {}
+        if not ids:
+            return []
+        if isinstance(ids, integer_types):
+            ids = [ids]
+        return [(r['id'], tools.ustr(r[self._rec_name])) for r in self.read(cr, user, ids,
+            [self._rec_name], context, load='_classic_write')]
 
     def name_search(self, cr, user, name='', args=None, operator='ilike',
                     context=None, limit=100):

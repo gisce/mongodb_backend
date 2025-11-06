@@ -198,6 +198,17 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             [(mmt_id, 'Foo')]
         )
 
+        # Test with single id (integer)
+        result = mmt_obj.name_get(cursor, uid, mmt_id)
+        self.assertListEqual(
+            result,
+            [(mmt_id, 'Foo')]
+        )
+
+        # Test with empty ids
+        result = mmt_obj.name_get(cursor, uid, [])
+        self.assertListEqual(result, [])
+
         # Changing the rec_name should use other field
         MongoModelTest._rec_name = 'other_name'
         result = mmt_obj.name_get(cursor, uid, [mmt_id])
@@ -205,6 +216,8 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             result,
             [(mmt_id, 'Bar')]
         )
+        # Reset _rec_name to default
+        MongoModelTest._rec_name = 'name'
 
     def test_name_search(self):
         self.create_model()
