@@ -212,6 +212,9 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         uid = self.txn.user
         mmt_obj = self.openerp.pool.get(MongoModelTest._name)
         
+        # Save original _rec_name
+        original_rec_name = MongoModelTest._rec_name
+        
         # Create test records
         mmt_id1 = mmt_obj.create(cursor, uid, {
             'name': 'Apple Product',
@@ -277,13 +280,14 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         self.assertIn((mmt_id2, 'Banana Product'), result)
         
         # Test with different _rec_name
-        MongoModelTest._rec_name = 'other_name'
-        result = mmt_obj.name_search(cursor, uid, 'Product A')
-        self.assertIn((mmt_id1, 'Product A'), result)
-        self.assertEqual(len(result), 1)
-        
-        # Reset _rec_name to default
-        MongoModelTest._rec_name = 'name'
+        try:
+            MongoModelTest._rec_name = 'other_name'
+            result = mmt_obj.name_search(cursor, uid, 'Product A')
+            self.assertIn((mmt_id1, 'Product A'), result)
+            self.assertEqual(len(result), 1)
+        finally:
+            # Always restore original _rec_name
+            MongoModelTest._rec_name = original_rec_name
 
     def test_boolean(self):
         self.create_model()

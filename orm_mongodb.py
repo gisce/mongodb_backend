@@ -591,7 +591,7 @@ class orm_mongodb(orm.orm_template):
                     context=None, limit=100):
         if args is None:
             args = []
-        if not context:
+        if context is None:
             context = {}
         
         # Build the search domain
