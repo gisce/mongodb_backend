@@ -583,7 +583,6 @@ class orm_mongodb(orm.orm_template):
         # nothing to check in schema free...
         pass
 
-    @isolation(readonly=True, isolation_level='repeatable_read')
     def name_get(self, cr, user, ids, context=None):
         if not context:
             context = {}
