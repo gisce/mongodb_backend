@@ -516,6 +516,19 @@ class orm_mongodb(orm.orm_template):
         collection = mdbpool.get_collection(self._table)
         self.search_trans_fields(tmp_args)
 
+        # Support for active field: automatically filter by active=True
+        # unless active_test is explicitly set to False in context
+        if not context:
+            context = {}
+        if 'active' in self._columns and context.get('active_test', True):
+            # Check if 'active' is already in the domain
+            has_active_clause = any(
+                isinstance(clause, (list, tuple)) and len(clause) >= 1 and clause[0] == 'active'
+                for clause in tmp_args
+            )
+            if not has_active_clause:
+                tmp_args.append(['active', '=', True])
+
         new_args = mdbpool.translate_domain(tmp_args)
         # Implement exact match for fields char which defaults to ilike
         for k in new_args:
@@ -525,8 +538,6 @@ class orm_mongodb(orm.orm_template):
             if getattr(field, 'exact_match', False):
                 if isinstance(new_args[k], re._pattern_type):
                     new_args[k] = new_args[k].pattern.lstrip('.*').rstrip('.*')
-        if not context:
-            context = {}
         self.pool.get('ir.model.access').check(cr, user,
                         self._name, 'read', context=context)
         #In very large collections when no args
