@@ -116,6 +116,18 @@ class MongoModelTest(osv_mongodb.osv_mongodb):
     }
 
 
+class MongoModelTestWithActive(osv_mongodb.osv_mongodb):
+    _name = 'mongomodel.test.with.active'
+
+    _columns = {
+        'name': fields.char('Name', size=64),
+        'active': fields.boolean('Active'),
+    }
+    _defaults = {
+        'active': lambda *a: True
+    }
+
+
 class NoMongoModelTestWithGridFs(osv.osv):
     _name = 'no.mongomodel.test.with.gridfs'
 
@@ -629,3 +641,66 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             res,
             [{"_id": "Bar", "total": 15, "count": 2}, {"_id": "Bar2", "total": 5, "count": 1}]
         )
+
+    def test_active_field(self):
+        """Test that active field filtering works as expected"""
+        with Transaction().start(self.database) as txn:
+            cursor = txn.cursor
+            uid = txn.user
+            
+            # Initialize the model with active field
+            MongoModelTestWithActive()
+            osv.class_pool[MongoModelTestWithActive._name].createInstance(
+                self.openerp.pool, 'mongodb_backend', cursor
+            )
+            mmt_active_obj = self.openerp.pool.get(MongoModelTestWithActive._name)
+            mmt_active_obj._auto_init(cursor)
+            
+            import uuid
+            # Create an active record
+            unique_ident_active = 'active_{}'.format(uuid.uuid4())
+            active_id = mmt_active_obj.create(cursor, uid, {
+                'name': unique_ident_active,
+                'active': True
+            })
+            
+            # Create an inactive record
+            unique_ident_inactive = 'inactive_{}'.format(uuid.uuid4())
+            inactive_id = mmt_active_obj.create(cursor, uid, {
+                'name': unique_ident_inactive,
+                'active': False
+            })
+            
+            # Test 1: Default search should only return active records
+            all_ids = mmt_active_obj.search(cursor, uid, [])
+            self.assertIn(active_id, all_ids)
+            self.assertNotIn(inactive_id, all_ids)
+            
+            # Test 2: Search with active_test=False should return all records
+            all_ids_including_inactive = mmt_active_obj.search(
+                cursor, uid, [], context={'active_test': False}
+            )
+            self.assertIn(active_id, all_ids_including_inactive)
+            self.assertIn(inactive_id, all_ids_including_inactive)
+            
+            # Test 3: Explicit active=False search should return inactive records
+            inactive_ids = mmt_active_obj.search(
+                cursor, uid, [('active', '=', False)]
+            )
+            self.assertNotIn(active_id, inactive_ids)
+            self.assertIn(inactive_id, inactive_ids)
+            
+            # Test 4: Explicit active=True search should return active records
+            active_ids = mmt_active_obj.search(
+                cursor, uid, [('active', '=', True)]
+            )
+            self.assertIn(active_id, active_ids)
+            self.assertNotIn(inactive_id, active_ids)
+            
+            # Test 5: Search count should respect active field
+            count_all = mmt_active_obj.search(cursor, uid, [], count=True)
+            count_with_inactive = mmt_active_obj.search(
+                cursor, uid, [], context={'active_test': False}, count=True
+            )
+            # Count with active_test=False should be greater
+            self.assertGreaterEqual(count_with_inactive, count_all)
