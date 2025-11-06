@@ -587,6 +587,26 @@ class orm_mongodb(orm.orm_template):
         result = self.read(cr, user, ids, [self._rec_name])
         return [(x['id'], x[self._rec_name]) for x in result]
 
+    def name_search(self, cr, user, name='', args=None, operator='ilike',
+                    context=None, limit=100):
+        if args is None:
+            args = []
+        if not context:
+            context = {}
+        
+        # Build the search domain
+        search_domain = list(args)
+        
+        # Add the name filter if name is provided
+        if name:
+            search_domain.append((self._rec_name, operator, name))
+        
+        # Search for matching records
+        ids = self.search(cr, user, search_domain, limit=limit, context=context)
+        
+        # Return results in name_get format
+        return self.name_get(cr, user, ids, context=context)
+
     def perm_read(self, cr, user, ids, context=None, details=True):
 
         if not ids:
