@@ -629,3 +629,67 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             res,
             [{"_id": "Bar", "total": 15, "count": 2}, {"_id": "Bar2", "total": 5, "count": 1}]
         )
+
+
+class MongoDBBatchingTests(testing.MongoDBTestCase):
+
+    def setUp(self):
+        self.txn = Transaction().start(self.database)
+        self.create_model()
+
+    def tearDown(self):
+        self.cleanup()
+        self.txn.stop()
+
+    def cleanup(self):
+        from mongodb_backend.mongodb2 import mdbpool
+        db = mdbpool.get_db()
+        db.drop_collection("mongomodel_test")
+
+    def create_model(self):
+        cursor = self.txn.cursor
+        MongoModelTest()
+        osv.class_pool[MongoModelTest._name].createInstance(
+            self.openerp.pool, 'mongodb_backend', cursor
+        )
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        mmt_obj._auto_init(cursor)
+
+    def create_records(self, count):
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        ids = []
+        for i in range(count):
+            ids.append(mmt_obj.create(cursor, uid, {
+                'name': 'rec_%s' % i,
+                'other_name': 'old_%s' % i,
+                'boolean_field': bool(i % 2),
+                'integer_field_with_index': i
+            }))
+        return ids
+
+    def test_write_batches_respect_in_max(self):
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        cursor.IN_MAX = 2
+        ids = self.create_records(5)
+
+        mmt_obj.write(cursor, uid, ids, {'other_name': 'updated'})
+        res = mmt_obj.read(cursor, uid, ids, ['other_name'])
+        self.assertEqual(
+            [r['other_name'] for r in res],
+            ['updated'] * 5
+        )
+
+    def test_unlink_batches_respect_in_max(self):
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        cursor.IN_MAX = 3
+        ids = self.create_records(7)
+
+        mmt_obj.unlink(cursor, uid, ids)
+        res = mmt_obj.search(cursor, uid, [('id', 'in', ids)])
+        self.assertEqual(res, [])
