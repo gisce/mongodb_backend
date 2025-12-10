@@ -115,8 +115,7 @@ class orm_mongodb(orm.orm_template):
             def_values = self.default_get(cr, 1, def_fields)
             try:
                 collection.update_many({},
-                                       {'$set': def_values},
-                                       upsert=False)
+                                       {'$set': def_values})
             except Exception as e:
                 raise except_orm('MongoDB update defaults error', '{}'.format(e))
 
