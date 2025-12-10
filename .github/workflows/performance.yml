@@ -1,0 +1,180 @@
+name: Performance Tests
+
+on:
+  pull_request:
+    types: [ labeled, opened, synchronize, reopened ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance-tests:
+    # Run on PRs with 'performance' label or 'to be merged' label, or manual trigger
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && 
+       (contains(github.event.pull_request.labels.*.name, 'performance') ||
+        contains(github.event.pull_request.labels.*.name, 'to be merged')))
+    
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.11" ]
+        mongo-version: [ "3.0", "5.0", "8.0" ]
+    
+    services:
+      postgres:
+        image: timescale/timescaledb-ha:pg15-ts2.11-all
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 127.0.0.1:5432:5432
+
+      redis:
+        image: redis:5.0
+        ports:
+          - 127.0.0.1:6379:6379
+
+      mongo:
+        image: mongo:${{ matrix.mongo-version }}
+        ports:
+          - 127.0.0.1:27017:27017
+    
+    steps:
+      - name: Checkout code (mongodb_backend)
+        uses: actions/checkout@v4
+        with:
+          path: src/mongodb_backend
+
+      - name: Checkout code (oorq)
+        uses: actions/checkout@v4
+        with:
+          path: src/oorq
+          repository: gisce/oorq
+          token: ${{ secrets.RO_GITHUB_ACTIONS_REPOS }}
+
+      - name: Checkout code (ERP)
+        uses: actions/checkout@v4
+        with:
+          path: src/erp
+          repository: gisce/erp
+          token: ${{ secrets.RO_GITHUB_ACTIONS_REPOS }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Requirements
+        run: |
+          pip install -r src/erp/requirements.txt
+          pip install -r src/erp/requirements-dev.txt
+          pip install -r src/erp/server/bin/addons/base/requirements.txt
+          pip install -r src/oorq/requirements.txt
+          pip install pymongo==3.13.0
+          pip install destral
+
+      - name: Link addons
+        run: |
+          cd src/erp
+          python tools/link_addons.py
+
+      - name: Run Performance Tests
+        env:
+          GITHUB_ACTIONS: true
+          PYTHON_VERSION: ${{ matrix.python-version }}
+          MONGO_VERSION: ${{ matrix.mongo-version }}
+          OPENERP_SECRET: shhhhhhhht
+          OPENERP_REDIS_URL: redis://localhost:6379/0
+          OPENERP_ROOT_PATH: ${{ github.workspace }}/src/erp/server/bin
+          OPENERP_ADDONS_PATH: ${{ github.workspace }}/src/erp/server/bin/addons
+          PYTHONPATH: ${{ github.workspace }}/src/erp/server/bin:${{ github.workspace }}/src/erp/server/bin/addons:${{ github.workspace }}/src/erp/server/sitecustomize
+          OPENERP_DB_USER: erp
+          OPENERP_DB_PASSWORD: erp
+          OPENERP_DB_HOST: localhost
+        run: |
+          cd src/mongodb_backend
+          python -m pytest tests/test_performance.py -v --tb=short --junit-xml=${{ github.workspace }}/performance_results_mongo${{ matrix.mongo-version }}.xml || true
+
+      - name: Upload Performance Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report-mongo${{ matrix.mongo-version }}-py${{ matrix.python-version }}
+          path: |
+            ${{ github.workspace }}/performance_report.json
+            ${{ github.workspace }}/performance_results_*.xml
+          retention-days: 30
+
+      - name: Generate Performance Summary
+        if: always()
+        run: |
+          if [ -f "${{ github.workspace }}/performance_report.json" ]; then
+            echo "## Performance Test Results - MongoDB ${{ matrix.mongo-version }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            python3 << 'EOF' >> $GITHUB_STEP_SUMMARY
+          import json
+          import sys
+          
+          try:
+              with open('${{ github.workspace }}/performance_report.json', 'r') as f:
+                  report = json.load(f)
+              
+              print("### Summary")
+              print("")
+              if 'summary' in report and report['summary']:
+                  summary = report['summary']
+                  print(f"- **Total Comparisons**: {summary.get('total_comparisons', 'N/A')}")
+                  print(f"- **Average Improvement**: {summary.get('average_improvement_pct', 0):.2f}%")
+                  print(f"- **Average Speedup**: {summary.get('average_speedup_factor', 0):.2f}x")
+                  print(f"- **Improvement Range**: {summary.get('min_improvement_pct', 0):.2f}% - {summary.get('max_improvement_pct', 0):.2f}%")
+              else:
+                  print("- No comparison data available")
+              
+              print("")
+              print("### Detailed Metrics")
+              print("")
+              
+              if 'detailed_metrics' in report and report['detailed_metrics']:
+                  print("| Operation | Iterations | Mean Duration | Throughput |")
+                  print("|-----------|------------|---------------|------------|")
+                  for op_name, stats in report['detailed_metrics'].items():
+                      print(f"| {op_name} | {stats.get('count', 0)} | {stats.get('mean_duration', 0):.4f}s | {stats.get('mean_ops_per_sec', 0):.2f} ops/sec |")
+              else:
+                  print("No detailed metrics available")
+              
+              print("")
+              
+              if 'comparisons' in report and report['comparisons']:
+                  print("### Performance Comparisons")
+                  print("")
+                  print("| Operation | Old Method | New Method | Speedup | Improvement |")
+                  print("|-----------|------------|------------|---------|-------------|")
+                  for comp in report['comparisons']:
+                      print(f"| {comp['operation']} | {comp['old_method_time']:.4f}s | {comp['new_method_time']:.4f}s | {comp['speedup_factor']:.2f}x | {comp['improvement_pct']:.2f}% |")
+          
+          except FileNotFoundError:
+              print("Performance report not found.")
+          except Exception as e:
+              print(f"Error reading performance report: {e}")
+          EOF
+          else
+            echo "No performance report generated." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Publish Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          junit_files: "${{ github.workspace }}/performance_results_*.xml"
+          check_name: "Performance Test Results - MongoDB ${{ matrix.mongo-version }}"
+          comment_title: "Performance Tests - MongoDB ${{ matrix.mongo-version }} (Python ${{ matrix.python-version }})"
