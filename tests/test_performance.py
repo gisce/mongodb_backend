@@ -55,23 +55,30 @@ class PerformanceMetrics:
         if operation_name not in self.metrics:
             self.metrics[operation_name] = []
         
+        # Prevent division by zero with a small epsilon
+        duration = max(duration, 1e-9)
+        
         self.metrics[operation_name].append({
             'duration': duration,
             'records': records_count,
-            'ops_per_sec': records_count / duration if duration > 0 else 0,
-            'timestamp': datetime.now().isoformat()
+            'ops_per_sec': records_count / duration,
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
     
     def add_comparison(self, operation, old_time, new_time, records):
         """Add a comparison between old and new implementations."""
-        improvement_pct = ((old_time - new_time) / old_time * 100) if old_time > 0 else 0
+        # Prevent division by zero with epsilon
+        old_time = max(old_time, 1e-9)
+        new_time = max(new_time, 1e-9)
+        
+        improvement_pct = ((old_time - new_time) / old_time * 100)
         self.comparisons.append({
             'operation': operation,
             'old_method_time': old_time,
             'new_method_time': new_time,
             'records': records,
             'improvement_pct': improvement_pct,
-            'speedup_factor': old_time / new_time if new_time > 0 else 0
+            'speedup_factor': old_time / new_time
         })
     
     def get_statistics(self, operation_name):
@@ -98,7 +105,7 @@ class PerformanceMetrics:
         """Generate a comprehensive performance report."""
         report = {
             'test_run': {
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'environment': 'GitHub Actions' if os.environ.get('GITHUB_ACTIONS') else 'Local',
                 'python_version': os.environ.get('PYTHON_VERSION', 'unknown'),
             },
@@ -176,9 +183,25 @@ class PerformanceMetrics:
     def save_report(self, filename='performance_report.json'):
         """Save report to JSON file."""
         report = self.generate_report()
-        with open(filename, 'w') as f:
-            json.dump(report, f, indent=2)
-        print(f"\nPerformance report saved to: {filename}")
+        
+        # Validate filename and use fallback if needed
+        if not filename or not isinstance(filename, str):
+            filename = 'performance_report.json'
+        
+        try:
+            with open(filename, 'w') as f:
+                json.dump(report, f, indent=2)
+            print(f"\nPerformance report saved to: {filename}")
+        except (IOError, OSError) as e:
+            print(f"\nWarning: Could not save report to {filename}: {e}")
+            # Try fallback location
+            fallback = '/tmp/performance_report.json'
+            try:
+                with open(fallback, 'w') as f:
+                    json.dump(report, f, indent=2)
+                print(f"Report saved to fallback location: {fallback}")
+            except Exception as e2:
+                print(f"Error: Could not save report to fallback location: {e2}")
 
 
 @unittest.skipIf(SKIP_IF_NOT_CI, SKIP_REASON)
@@ -201,7 +224,11 @@ class TestWritePerformance(testing.MongoDBTestCase):
             # Save report in GitHub Actions
             if os.environ.get('GITHUB_ACTIONS'):
                 workspace = os.environ.get('GITHUB_WORKSPACE', '.')
-                report_file = os.path.join(workspace, 'performance_report.json')
+                # Validate workspace path
+                if workspace and os.path.isdir(workspace):
+                    report_file = os.path.join(workspace, 'performance_report.json')
+                else:
+                    report_file = 'performance_report.json'
                 self.metrics.save_report(report_file)
     
     def _setup_test_model(self):
@@ -319,7 +346,8 @@ class TestWritePerformance(testing.MongoDBTestCase):
         
         # Calculate variance
         stats = self.metrics.get_statistics('sequential_write')
-        coefficient_of_variation = (stats['stdev_duration'] / stats['mean_duration']) * 100
+        # Prevent division by zero for coefficient of variation
+        coefficient_of_variation = (stats['stdev_duration'] / stats['mean_duration']) * 100 if stats['mean_duration'] > 1e-9 else 0
         
         # Assert consistency: CV should be reasonable (< 50%)
         self.assertLess(coefficient_of_variation, 50,
@@ -364,7 +392,9 @@ class TestWritePerformance(testing.MongoDBTestCase):
             batch_stats.append(stats['mean_duration'])
         
         # Variance across batches should be low
-        batch_cv = (stdev(batch_stats) / mean(batch_stats)) * 100
+        # Prevent division by zero
+        batch_mean = mean(batch_stats)
+        batch_cv = (stdev(batch_stats) / batch_mean) * 100 if batch_mean > 1e-9 else 0
         self.assertLess(batch_cv, 30,
                        f"Sustained write throughput has high variance (CV={batch_cv:.1f}%)")
     

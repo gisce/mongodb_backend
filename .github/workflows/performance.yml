@@ -101,9 +101,10 @@ jobs:
           OPENERP_DB_USER: erp
           OPENERP_DB_PASSWORD: erp
           OPENERP_DB_HOST: localhost
+        continue-on-error: true
         run: |
           cd src/mongodb_backend
-          python -m pytest tests/test_performance.py -v --tb=short --junit-xml=${{ github.workspace }}/performance_results_mongo${{ matrix.mongo-version }}.xml || true
+          python -m pytest tests/test_performance.py -v --tb=short --junit-xml=${{ github.workspace }}/performance_results_mongo${{ matrix.mongo-version }}.xml
 
       - name: Upload Performance Report
         if: always()
@@ -163,9 +164,14 @@ jobs:
                       print(f"| {comp['operation']} | {comp['old_method_time']:.4f}s | {comp['new_method_time']:.4f}s | {comp['speedup_factor']:.2f}x | {comp['improvement_pct']:.2f}% |")
           
           except FileNotFoundError:
-              print("Performance report not found.")
+              print("Performance report file not found. Tests may not have generated output.")
+          except json.JSONDecodeError as e:
+              print(f"Error parsing performance report JSON: {e}")
+              print("The report file may be corrupted or incomplete.")
+          except KeyError as e:
+              print(f"Missing expected key in performance report: {e}")
           except Exception as e:
-              print(f"Error reading performance report: {e}")
+              print(f"Unexpected error reading performance report: {type(e).__name__}: {e}")
           EOF
           else
             echo "No performance report generated." >> $GITHUB_STEP_SUMMARY
