@@ -18,7 +18,7 @@ The performance test suite (`test_performance.py`) measures:
 ### In GitHub Actions (Recommended)
 
 Performance tests automatically run in GitHub Actions when:
-- A PR is labeled with `performance` or `to be merged`
+- A PR is labeled with `performance_check`
 - Manually triggered via workflow dispatch
 
 The tests run across multiple MongoDB versions (3.0, 5.0, 8.0) to ensure consistent performance improvements.
@@ -135,7 +135,7 @@ When adding new performance tests:
 
 ## Continuous Monitoring
 
-Performance tests run automatically on every PR with the `to be merged` label, ensuring:
+Performance tests run automatically on every PR with the `performance_check` label, ensuring:
 - No performance regressions are introduced
 - Improvements are validated across MongoDB versions
 - Historical performance data is tracked

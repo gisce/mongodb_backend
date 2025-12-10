@@ -11,12 +11,11 @@ concurrency:
 
 jobs:
   performance-tests:
-    # Run on PRs with 'performance' label or 'to be merged' label, or manual trigger
+    # Run on PRs with 'performance_check' label or manual trigger
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && 
-       (contains(github.event.pull_request.labels.*.name, 'performance') ||
-        contains(github.event.pull_request.labels.*.name, 'to be merged')))
+       contains(github.event.pull_request.labels.*.name, 'performance_check'))
     
     runs-on: ubuntu-22.04
     strategy:
