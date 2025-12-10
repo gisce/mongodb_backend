@@ -232,6 +232,17 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             [(mmt_id, 'Foo')]
         )
 
+        # Test with single id (integer)
+        result = mmt_obj.name_get(cursor, uid, mmt_id)
+        self.assertListEqual(
+            result,
+            [(mmt_id, 'Foo')]
+        )
+
+        # Test with empty ids
+        result = mmt_obj.name_get(cursor, uid, [])
+        self.assertListEqual(result, [])
+
         # Changing the rec_name should use other field
         MongoModelTest._rec_name = 'other_name'
         result = mmt_obj.name_get(cursor, uid, [mmt_id])
@@ -239,6 +250,91 @@ class MongoDBORMTests(testing.MongoDBTestCase):
             result,
             [(mmt_id, 'Bar')]
         )
+        # Reset _rec_name to default
+        MongoModelTest._rec_name = 'name'
+
+    def test_name_search(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        
+        # Save original _rec_name
+        original_rec_name = MongoModelTest._rec_name
+        
+        # Create test records
+        mmt_id1 = mmt_obj.create(cursor, uid, {
+            'name': 'Apple Product',
+            'other_name': 'Product A',
+            'boolean_field': True
+        })
+        mmt_id2 = mmt_obj.create(cursor, uid, {
+            'name': 'Banana Product',
+            'other_name': 'Product B',
+            'boolean_field': True
+        })
+        mmt_id3 = mmt_obj.create(cursor, uid, {
+            'name': 'Cherry Product',
+            'other_name': 'Product C',
+            'boolean_field': False
+        })
+        
+        # Test basic name search with ilike operator (default)
+        result = mmt_obj.name_search(cursor, uid, 'Apple')
+        self.assertIn((mmt_id1, 'Apple Product'), result)
+        self.assertEqual(len(result), 1)
+        
+        # Test case-insensitive search
+        result = mmt_obj.name_search(cursor, uid, 'apple')
+        self.assertIn((mmt_id1, 'Apple Product'), result)
+        self.assertEqual(len(result), 1)
+        
+        # Test partial match
+        result = mmt_obj.name_search(cursor, uid, 'Product')
+        self.assertEqual(len(result), 3)
+        result_ids = [r[0] for r in result]
+        self.assertIn(mmt_id1, result_ids)
+        self.assertIn(mmt_id2, result_ids)
+        self.assertIn(mmt_id3, result_ids)
+        
+        # Test with args (domain filters)
+        result = mmt_obj.name_search(cursor, uid, 'Product', 
+                                      args=[('boolean_field', '=', True)])
+        self.assertEqual(len(result), 2)
+        result_ids = [r[0] for r in result]
+        self.assertIn(mmt_id1, result_ids)
+        self.assertIn(mmt_id2, result_ids)
+        self.assertNotIn(mmt_id3, result_ids)
+        
+        # Test with empty name (should return all records or filtered by args)
+        result = mmt_obj.name_search(cursor, uid, '', 
+                                      args=[('boolean_field', '=', False)])
+        self.assertEqual(len(result), 1)
+        self.assertIn((mmt_id3, 'Cherry Product'), result)
+        
+        # Test with limit
+        result = mmt_obj.name_search(cursor, uid, 'Product', limit=2)
+        self.assertEqual(len(result), 2)
+        
+        # Test with exact match operator
+        result = mmt_obj.name_search(cursor, uid, 'Apple Product', operator='=')
+        self.assertEqual(len(result), 1)
+        self.assertIn((mmt_id1, 'Apple Product'), result)
+        
+        # Test with like operator
+        result = mmt_obj.name_search(cursor, uid, 'Banana%', operator='like')
+        self.assertEqual(len(result), 1)
+        self.assertIn((mmt_id2, 'Banana Product'), result)
+        
+        # Test with different _rec_name
+        try:
+            MongoModelTest._rec_name = 'other_name'
+            result = mmt_obj.name_search(cursor, uid, 'Product A')
+            self.assertIn((mmt_id1, 'Product A'), result)
+            self.assertEqual(len(result), 1)
+        finally:
+            # Always restore original _rec_name
+            MongoModelTest._rec_name = original_rec_name
 
     def test_boolean(self):
         self.create_model()
