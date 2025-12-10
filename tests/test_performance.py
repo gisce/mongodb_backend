@@ -5,7 +5,7 @@ Performance test suite for MongoDB backend write operations.
 This test suite measures the performance improvements from replacing
 deprecated PyMongo 2.x methods with modern PyMongo 3.x methods.
 
-Tests only run in GitHub Actions workflows where GITHUB_ACTIONS=true.
+Tests run in all environments but only perform measurements in GitHub Actions.
 """
 from __future__ import absolute_import, unicode_literals
 import unittest
@@ -20,10 +20,12 @@ from mongodb_backend import testing, osv_mongodb
 from destral.transaction import Transaction
 from mongodb_backend import mongodb2
 
-
-# Skip all tests if not running in GitHub Actions
-SKIP_REASON = "Performance tests only run in GitHub Actions (GITHUB_ACTIONS env var not set)"
-SKIP_IF_NOT_CI = not os.environ.get('GITHUB_ACTIONS', '').lower() == 'true'
+# Import requests if available for GitHub API posting
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
 
 
 class PerformanceTestModel(osv_mongodb.osv_mongodb):
@@ -202,22 +204,120 @@ class PerformanceMetrics:
                 print(f"Report saved to fallback location: {fallback}")
             except Exception as e2:
                 print(f"Error: Could not save report to fallback location: {e2}")
+    
+    def post_to_github_pr(self, report):
+        """Post performance report to GitHub PR via API."""
+        if not HAS_REQUESTS:
+            print("\nSkipping GitHub PR comment: requests library not available")
+            return
+        
+        pr_number = os.environ.get('GITHUB_ACTIONS_PR')
+        github_token = os.environ.get('GITHUB_TOKEN')
+        github_repository = os.environ.get('GITHUB_REPOSITORY', 'gisce/mongodb_backend')
+        
+        if not pr_number or not github_token:
+            print("\nSkipping GitHub PR comment: GITHUB_ACTIONS_PR or GITHUB_TOKEN not set")
+            return
+        
+        # Generate markdown comment
+        comment_body = self._generate_pr_comment(report)
+        
+        # Post to GitHub API
+        url = f"https://api.github.com/repos/{github_repository}/issues/{pr_number}/comments"
+        headers = {
+            'Authorization': f'token {github_token}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json={'body': comment_body})
+            if response.status_code == 201:
+                print(f"\nPerformance report posted to PR #{pr_number}")
+            else:
+                print(f"\nFailed to post to PR: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"\nError posting to GitHub PR: {e}")
+    
+    def _generate_pr_comment(self, report):
+        """Generate markdown comment for GitHub PR."""
+        lines = [
+            "## 📊 Performance Test Results",
+            "",
+            f"**Test Run:** {report['test_run']['timestamp']}",
+            f"**Environment:** {report['test_run']['environment']}",
+            f"**Python Version:** {report['test_run']['python_version']}",
+            ""
+        ]
+        
+        if 'summary' in report and report['summary']:
+            summary = report['summary']
+            lines.extend([
+                "### Summary",
+                "",
+                f"- **Total Comparisons:** {summary.get('total_comparisons', 'N/A')}",
+                f"- **Average Improvement:** {summary.get('average_improvement_pct', 0):.2f}%",
+                f"- **Average Speedup:** {summary.get('average_speedup_factor', 0):.2f}x",
+                f"- **Improvement Range:** {summary.get('min_improvement_pct', 0):.2f}% - {summary.get('max_improvement_pct', 0):.2f}%",
+                ""
+            ])
+        
+        if 'detailed_metrics' in report and report['detailed_metrics']:
+            lines.extend([
+                "### Detailed Metrics",
+                "",
+                "| Operation | Iterations | Mean Duration | Median | Throughput |",
+                "|-----------|------------|---------------|--------|------------|"
+            ])
+            for op_name, stats in report['detailed_metrics'].items():
+                lines.append(
+                    f"| {op_name} | {stats.get('count', 0)} | "
+                    f"{stats.get('mean_duration', 0):.4f}s | "
+                    f"{stats.get('median_duration', 0):.4f}s | "
+                    f"{stats.get('mean_ops_per_sec', 0):.2f} ops/sec |"
+                )
+            lines.append("")
+        
+        if 'comparisons' in report and report['comparisons']:
+            lines.extend([
+                "### Performance Comparisons",
+                "",
+                "| Operation | Old Method | New Method | Speedup | Improvement |",
+                "|-----------|------------|------------|---------|-------------|"
+            ])
+            for comp in report['comparisons']:
+                lines.append(
+                    f"| {comp['operation']} | {comp['old_method_time']:.4f}s | "
+                    f"{comp['new_method_time']:.4f}s | {comp['speedup_factor']:.2f}x | "
+                    f"{comp['improvement_pct']:.2f}% |"
+                )
+        
+        return '\n'.join(lines)
 
 
-@unittest.skipIf(SKIP_IF_NOT_CI, SKIP_REASON)
 class TestWritePerformance(testing.MongoDBTestCase):
     """Test write operation performance improvements."""
     
     def setUp(self):
+        # Check if we should run performance tests
+        self.should_run_perf = os.environ.get('GITHUB_ACTIONS', '').lower() == 'true'
+        
+        if not self.should_run_perf:
+            # Skip performance measurements but still run basic setup
+            self.skipTest("Performance tests only run in GitHub Actions")
+            return
+        
         self.txn = Transaction().start(self.database)
         self.metrics = PerformanceMetrics()
         self._setup_test_model()
     
     def tearDown(self):
+        if not self.should_run_perf:
+            return
+            
         self._cleanup()
         self.txn.stop()
         
-        # Print report after all tests
+        # Generate and print report after all tests
         if hasattr(self, 'metrics'):
             report = self.metrics.print_report()
             
@@ -230,6 +330,9 @@ class TestWritePerformance(testing.MongoDBTestCase):
                 else:
                     report_file = 'performance_report.json'
                 self.metrics.save_report(report_file)
+                
+                # Post results to GitHub PR
+                self.metrics.post_to_github_pr(report)
     
     def _setup_test_model(self):
         """Setup the performance test model."""
@@ -434,15 +537,25 @@ class TestWritePerformance(testing.MongoDBTestCase):
                        f"Bulk deletes (50 records) averaging {bulk_stats['mean_duration']:.4f}s should be < 1.0s")
 
 
-@unittest.skipIf(SKIP_IF_NOT_CI, SKIP_REASON)
 class TestPerformanceRegression(testing.MongoDBTestCase):
     """Test that performance hasn't regressed from the changes."""
     
     def setUp(self):
+        # Check if we should run performance tests
+        self.should_run_perf = os.environ.get('GITHUB_ACTIONS', '').lower() == 'true'
+        
+        if not self.should_run_perf:
+            # Skip performance measurements but still run basic setup
+            self.skipTest("Performance tests only run in GitHub Actions")
+            return
+        
         self.txn = Transaction().start(self.database)
         self._setup_test_model()
     
     def tearDown(self):
+        if not self.should_run_perf:
+            return
+            
         self._cleanup()
         self.txn.stop()
     

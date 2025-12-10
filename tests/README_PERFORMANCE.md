@@ -15,29 +15,37 @@ The performance test suite (`test_performance.py`) measures:
 
 ## Running Tests
 
-### In GitHub Actions (Recommended)
+### In Normal Test Runs
 
-Performance tests automatically run in GitHub Actions when:
-- A PR is labeled with `performance_check`
-- Manually triggered via workflow dispatch
+Performance tests are included in the standard test suite and run automatically with all other tests. However, performance measurements are only collected when running in GitHub Actions CI environment.
 
-The tests run across multiple MongoDB versions (3.0, 5.0, 8.0) to ensure consistent performance improvements.
+### Locally (Performance Measurements Skipped)
 
-### Locally (Tests Will Skip)
-
-Performance tests are designed to run only in GitHub Actions CI environment. When run locally, they will be skipped with the message:
+When running tests locally, performance tests will execute but skip the actual performance measurements:
 
 ```
 Performance tests only run in GitHub Actions (GITHUB_ACTIONS env var not set)
 ```
 
-To force local execution (not recommended for accurate measurements):
-```bash
-export GITHUB_ACTIONS=true
-python -m pytest tests/test_performance.py -v
-```
+The tests will pass without performing time-consuming performance benchmarks.
+
+### In GitHub Actions
+
+Performance tests automatically collect metrics and post results to PRs when running in GitHub Actions with the required environment variables set:
+- `GITHUB_ACTIONS=true` - Enables performance measurement
+- `GITHUB_ACTIONS_PR` - PR number for posting results
+- `GITHUB_TOKEN` - GitHub token for API access
+
+Results are posted as a comment on the PR with detailed performance metrics.
 
 ## Test Reports
+
+### GitHub PR Comments
+
+When running in GitHub Actions with proper credentials, performance results are automatically posted to the PR as a comment showing:
+- Summary statistics (average improvement, speedup factors)
+- Detailed metrics for each operation
+- Performance comparisons with improvement percentages
 
 ### Console Output
 
@@ -127,7 +135,7 @@ Handles:
 
 When adding new performance tests:
 
-1. Use the `@unittest.skipIf(SKIP_IF_NOT_CI, SKIP_REASON)` decorator
+1. Check `GITHUB_ACTIONS` environment variable in setUp and skip if not present
 2. Record metrics using `PerformanceMetrics.record_operation()`
 3. Add meaningful assertions with descriptive failure messages
 4. Include the test in the performance report generation
@@ -135,16 +143,20 @@ When adding new performance tests:
 
 ## Continuous Monitoring
 
-Performance tests run automatically on every PR with the `performance_check` label, ensuring:
+Performance tests run automatically in all test workflows, ensuring:
 - No performance regressions are introduced
 - Improvements are validated across MongoDB versions
-- Historical performance data is tracked
+- Performance data is tracked via PR comments
 - Performance issues are caught early
 
 ## Environment Variables
 
-Required for GitHub Actions:
-- `GITHUB_ACTIONS`: Set to "true" to enable tests
+Required for GitHub Actions performance measurement and reporting:
+- `GITHUB_ACTIONS`: Set to "true" to enable performance measurements
+- `GITHUB_ACTIONS_PR`: PR number for posting results (e.g., "123")
+- `GITHUB_TOKEN`: GitHub token for API access to post comments
+- `PYTHON_VERSION`: Python version being tested
+- `MONGO_VERSION`: MongoDB version being tested
 - `PYTHON_VERSION`: Python version being tested
 - `MONGO_VERSION`: MongoDB version being tested
 - Standard ERP environment variables (see workflow files)
