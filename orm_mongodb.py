@@ -417,12 +417,15 @@ class orm_mongodb(orm.orm_template):
                     })
 
         #bulk update with modifiers, and safe mode
-        try:
-            collection.update({'id': {'$in': ids}},
-                              {'$set': vals},
-                              False, False, True, True, w=1)
-        except Exception as e:
-            raise except_orm('MongoDB update error', '{}'.format(e))
+        chunk_size = getattr(cr, 'IN_MAX', 1000)
+        for i in range(0, len(ids), chunk_size):
+            sub_ids = ids[i:i + chunk_size]
+            try:
+                collection.update({'id': {'$in': sub_ids}},
+                                  {'$set': vals},
+                                  False, False, True, True, w=1)
+            except Exception as e:
+                raise except_orm('MongoDB update error', '{}'.format(e))
 
         return True
 
@@ -572,10 +575,13 @@ class orm_mongodb(orm.orm_template):
         # Remove binary fields (files in gridfs)
         self.unlink_binary_gridfs_fields(collection, ids)
         #Remove with safe mode
-        try:
-            collection.remove({'id': {'$in': ids}}, True, w=1)
-        except Exception as e:
-            raise except_orm('MongoDB unlink error', '{}'.format(e))
+        chunk_size = getattr(cr, 'IN_MAX', 1000)
+        for i in range(0, len(ids), chunk_size):
+            sub_ids = ids[i:i + chunk_size]
+            try:
+                collection.remove({'id': {'$in': sub_ids}}, True, w=1)
+            except Exception as e:
+                raise except_orm('MongoDB unlink error', '{}'.format(e))
 
         return True
 
