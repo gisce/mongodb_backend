@@ -145,43 +145,52 @@ class PerformanceMetrics:
         print("\n" + "="*80)
         print("MONGODB BACKEND PERFORMANCE TEST REPORT")
         print("="*80)
-        print(f"\nTest Run: {report['test_run']['timestamp']}")
-        print(f"Environment: {report['test_run']['environment']}")
-        print(f"\nTest Configuration:")
-        print(f"  Python Version: {report['test_run']['python_version']}")
-        print(f"  PyMongo Version: {report['test_run']['pymongo_version']}")
-        print(f"  MongoDB Version: {report['test_run']['mongodb_version']}")
+        print("\nTest Run: {}".format(report['test_run']['timestamp']))
+        print("Environment: {}".format(report['test_run']['environment']))
+        print("\nTest Configuration:")
+        print("  Python Version: {}".format(report['test_run']['python_version']))
+        print("  PyMongo Version: {}".format(report['test_run']['pymongo_version']))
+        print("  MongoDB Version: {}".format(report['test_run']['mongodb_version']))
         
         if report['summary']:
             print("\n" + "-"*80)
             print("SUMMARY")
             print("-"*80)
-            print(f"Total Comparisons: {report['summary']['total_comparisons']}")
-            print(f"Average Improvement: {report['summary']['average_improvement_pct']:.2f}%")
-            print(f"Average Speedup Factor: {report['summary']['average_speedup_factor']:.2f}x")
-            print(f"Improvement Range: {report['summary']['min_improvement_pct']:.2f}% - {report['summary']['max_improvement_pct']:.2f}%")
+            print("Total Comparisons: {}".format(report['summary']['total_comparisons']))
+            print("Average Improvement: {:.2f}%".format(report['summary']['average_improvement_pct']))
+            print("Average Speedup Factor: {:.2f}x".format(report['summary']['average_speedup_factor']))
+            print("Improvement Range: {:.2f}% - {:.2f}%".format(
+                report['summary']['min_improvement_pct'],
+                report['summary']['max_improvement_pct']))
         
         if report['comparisons']:
             print("\n" + "-"*80)
             print("DETAILED COMPARISONS")
             print("-"*80)
-            print(f"{'Operation':<30} {'Old (s)':<12} {'New (s)':<12} {'Speedup':<10} {'Improvement':<12}")
+            print("{:<30} {:<12} {:<12} {:<10} {:<12}".format(
+                'Operation', 'Old (s)', 'New (s)', 'Speedup', 'Improvement'))
             print("-"*80)
             for comp in report['comparisons']:
-                print(f"{comp['operation']:<30} {comp['old_method_time']:<12.4f} {comp['new_method_time']:<12.4f} {comp['speedup_factor']:<10.2f}x {comp['improvement_pct']:<12.2f}%")
+                print("{:<30} {:<12.4f} {:<12.4f} {:<10.2f}x {:<12.2f}%".format(
+                    comp['operation'],
+                    comp['old_method_time'],
+                    comp['new_method_time'],
+                    comp['speedup_factor'],
+                    comp['improvement_pct']))
         
         if report['detailed_metrics']:
             print("\n" + "-"*80)
             print("DETAILED METRICS")
             print("-"*80)
             for op_name, stats in report['detailed_metrics'].items():
-                print(f"\n{op_name}:")
-                print(f"  Iterations: {stats['count']}")
-                print(f"  Mean Duration: {stats['mean_duration']:.4f}s")
-                print(f"  Median Duration: {stats['median_duration']:.4f}s")
-                print(f"  Min/Max: {stats['min_duration']:.4f}s / {stats['max_duration']:.4f}s")
-                print(f"  Std Dev: {stats['stdev_duration']:.4f}s")
-                print(f"  Mean Throughput: {stats['mean_ops_per_sec']:.2f} ops/sec")
+                print("\n{}:".format(op_name))
+                print("  Iterations: {}".format(stats['count']))
+                print("  Mean Duration: {:.4f}s".format(stats['mean_duration']))
+                print("  Median Duration: {:.4f}s".format(stats['median_duration']))
+                print("  Min/Max: {:.4f}s / {:.4f}s".format(
+                    stats['min_duration'], stats['max_duration']))
+                print("  Std Dev: {:.4f}s".format(stats['stdev_duration']))
+                print("  Mean Throughput: {:.2f} ops/sec".format(stats['mean_ops_per_sec']))
         
         print("\n" + "="*80)
         
@@ -198,17 +207,17 @@ class PerformanceMetrics:
         try:
             with open(filename, 'w') as f:
                 json.dump(report, f, indent=2)
-            print(f"\nPerformance report saved to: {filename}")
+            print("\nPerformance report saved to: {}".format(filename))
         except (IOError, OSError) as e:
-            print(f"\nWarning: Could not save report to {filename}: {e}")
+            print("\nWarning: Could not save report to {}: {}".format(filename, e))
             # Try fallback location
             fallback = '/tmp/performance_report.json'
             try:
                 with open(fallback, 'w') as f:
                     json.dump(report, f, indent=2)
-                print(f"Report saved to fallback location: {fallback}")
+                print("Report saved to fallback location: {}".format(fallback))
             except Exception as e2:
-                print(f"Error: Could not save report to fallback location: {e2}")
+                print("Error: Could not save report to fallback location: {}".format(e2))
     
     def post_to_github_pr(self, report):
         """Post performance report to GitHub PR via API."""
@@ -228,33 +237,34 @@ class PerformanceMetrics:
         comment_body = self._generate_pr_comment(report)
         
         # Post to GitHub API
-        url = f"https://api.github.com/repos/{github_repository}/issues/{pr_number}/comments"
+        url = "https://api.github.com/repos/{}/issues/{}/comments".format(
+            github_repository, pr_number)
         headers = {
-            'Authorization': f'token {github_token}',
+            'Authorization': 'token {}'.format(github_token),
             'Accept': 'application/vnd.github.v3+json'
         }
         
         try:
             response = requests.post(url, headers=headers, json={'body': comment_body})
             if response.status_code == 201:
-                print(f"\nPerformance report posted to PR #{pr_number}")
+                print("\nPerformance report posted to PR #{}".format(pr_number))
             else:
-                print(f"\nFailed to post to PR: {response.status_code} - {response.text}")
+                print("\nFailed to post to PR: {} - {}".format(response.status_code, response.text))
         except Exception as e:
-            print(f"\nError posting to GitHub PR: {e}")
+            print("\nError posting to GitHub PR: {}".format(e))
     
     def _generate_pr_comment(self, report):
         """Generate markdown comment for GitHub PR."""
         lines = [
             "## 📊 Performance Test Results",
             "",
-            f"**Test Run:** {report['test_run']['timestamp']}",
-            f"**Environment:** {report['test_run']['environment']}",
+            "**Test Run:** {}".format(report['test_run']['timestamp']),
+            "**Environment:** {}".format(report['test_run']['environment']),
             "",
             "### 🔧 Test Configuration",
-            f"- **Python Version:** {report['test_run']['python_version']}",
-            f"- **PyMongo Version:** {report['test_run']['pymongo_version']}",
-            f"- **MongoDB Version:** {report['test_run']['mongodb_version']}",
+            "- **Python Version:** {}".format(report['test_run']['python_version']),
+            "- **PyMongo Version:** {}".format(report['test_run']['pymongo_version']),
+            "- **MongoDB Version:** {}".format(report['test_run']['mongodb_version']),
             ""
         ]
         
@@ -263,10 +273,12 @@ class PerformanceMetrics:
             lines.extend([
                 "### Summary",
                 "",
-                f"- **Total Comparisons:** {summary.get('total_comparisons', 'N/A')}",
-                f"- **Average Improvement:** {summary.get('average_improvement_pct', 0):.2f}%",
-                f"- **Average Speedup:** {summary.get('average_speedup_factor', 0):.2f}x",
-                f"- **Improvement Range:** {summary.get('min_improvement_pct', 0):.2f}% - {summary.get('max_improvement_pct', 0):.2f}%",
+                "- **Total Comparisons:** {}".format(summary.get('total_comparisons', 'N/A')),
+                "- **Average Improvement:** {:.2f}%".format(summary.get('average_improvement_pct', 0)),
+                "- **Average Speedup:** {:.2f}x".format(summary.get('average_speedup_factor', 0)),
+                "- **Improvement Range:** {:.2f}% - {:.2f}%".format(
+                    summary.get('min_improvement_pct', 0),
+                    summary.get('max_improvement_pct', 0)),
                 ""
             ])
         
@@ -279,10 +291,12 @@ class PerformanceMetrics:
             ])
             for op_name, stats in report['detailed_metrics'].items():
                 lines.append(
-                    f"| {op_name} | {stats.get('count', 0)} | "
-                    f"{stats.get('mean_duration', 0):.4f}s | "
-                    f"{stats.get('median_duration', 0):.4f}s | "
-                    f"{stats.get('mean_ops_per_sec', 0):.2f} ops/sec |"
+                    "| {} | {} | {:.4f}s | {:.4f}s | {:.2f} ops/sec |".format(
+                        op_name,
+                        stats.get('count', 0),
+                        stats.get('mean_duration', 0),
+                        stats.get('median_duration', 0),
+                        stats.get('mean_ops_per_sec', 0))
                 )
             lines.append("")
         
@@ -295,9 +309,12 @@ class PerformanceMetrics:
             ])
             for comp in report['comparisons']:
                 lines.append(
-                    f"| {comp['operation']} | {comp['old_method_time']:.4f}s | "
-                    f"{comp['new_method_time']:.4f}s | {comp['speedup_factor']:.2f}x | "
-                    f"{comp['improvement_pct']:.2f}% |"
+                    "| {} | {:.4f}s | {:.4f}s | {:.2f}x | {:.2f}% |".format(
+                        comp['operation'],
+                        comp['old_method_time'],
+                        comp['new_method_time'],
+                        comp['speedup_factor'],
+                        comp['improvement_pct'])
                 )
         
         return '\n'.join(lines)
@@ -367,9 +384,9 @@ class TestWritePerformance(testing.MongoDBTestCase):
         
         for i in range(count):
             record_id = self.model.create(cursor, uid, {
-                'name': f'Test Record {i}',
+                'name': 'Test Record {}'.format(i),
                 'value': i,
-                'description': f'Performance test record number {i}',
+                'description': 'Performance test record number {}'.format(i),
                 'active': True,
             })
             ids.append(record_id)
@@ -393,7 +410,7 @@ class TestWritePerformance(testing.MongoDBTestCase):
             start_time = time.time()
             self.model.write(cursor, uid, [record_id], {
                 'value': i,
-                'description': f'Updated at iteration {i}'
+                'description': 'Updated at iteration {}'.format(i)
             })
             duration = time.time() - start_time
             self.metrics.record_operation('single_write', duration, records_count=1)
@@ -401,7 +418,7 @@ class TestWritePerformance(testing.MongoDBTestCase):
         # Assert performance is reasonable (< 100ms per write)
         stats = self.metrics.get_statistics('single_write')
         self.assertLess(stats['mean_duration'], 0.1, 
-                       f"Single writes averaging {stats['mean_duration']:.4f}s should be < 0.1s")
+                       "Single writes averaging {:.4f}s should be < 0.1s".format(stats['mean_duration']))
     
     def test_bulk_write_performance(self):
         """Test performance of bulk write operations."""
@@ -417,7 +434,7 @@ class TestWritePerformance(testing.MongoDBTestCase):
             start_time = time.time()
             self.model.write(cursor, uid, record_ids, {
                 'value': 1000 + i,
-                'description': f'Bulk update iteration {i}'
+                'description': '{}'.format(i)
             })
             duration = time.time() - start_time
             self.metrics.record_operation('bulk_write_100', duration, records_count=100)
@@ -425,11 +442,11 @@ class TestWritePerformance(testing.MongoDBTestCase):
         # Assert bulk performance is reasonable
         stats = self.metrics.get_statistics('bulk_write_100')
         self.assertLess(stats['mean_duration'], 1.0,
-                       f"Bulk writes (100 records) averaging {stats['mean_duration']:.4f}s should be < 1.0s")
+                       "Bulk writes (100 records) averaging {:.4f}s should be < 1.0s".format(stats['mean_duration']))
         
         # Throughput should be reasonable
         self.assertGreater(stats['mean_ops_per_sec'], 50,
-                          f"Bulk write throughput {stats['mean_ops_per_sec']:.2f} ops/sec should be > 50")
+                          "Bulk write throughput {:.2f} ops/sec should be > 50".format(stats['mean_ops_per_sec']))
     
     def test_sequential_writes_consistency(self):
         """Test that sequential writes have consistent performance (no random delays)."""
@@ -450,7 +467,7 @@ class TestWritePerformance(testing.MongoDBTestCase):
             start_time = time.time()
             self.model.write(cursor, uid, [record_id], {
                 'value': i,
-                'description': f'Sequential test {i}'
+                'description': 'Sequential test {}'.format(i)
             })
             duration = time.time() - start_time
             durations.append(duration)
@@ -463,14 +480,13 @@ class TestWritePerformance(testing.MongoDBTestCase):
         
         # Assert consistency: CV should be reasonable (< 50%)
         self.assertLess(coefficient_of_variation, 50,
-                       f"Sequential writes have high variance (CV={coefficient_of_variation:.1f}%), "
-                       f"indicating inconsistent performance")
+                       "Sequential writes have high variance (CV={:.1f}%), indicating inconsistent performance".format(coefficient_of_variation))
         
         # No individual write should be extremely slow
         max_acceptable = stats['mean_duration'] * 5  # Allow up to 5x mean
         self.assertLess(stats['max_duration'], max_acceptable,
-                       f"Max write time {stats['max_duration']:.4f}s is too high "
-                       f"(more than 5x mean of {stats['mean_duration']:.4f}s)")
+                       "Max write time {:.4f}s is too high (more than 5x mean of {:.4f}s)".format(
+                           stats['max_duration'], stats['mean_duration']))
     
     def test_write_throughput_sustained(self):
         """Test sustained write throughput over time."""
@@ -491,16 +507,16 @@ class TestWritePerformance(testing.MongoDBTestCase):
             start_time = time.time()
             self.model.write(cursor, uid, batch_ids, {
                 'value': 2000 + batch_num,
-                'description': f'Sustained throughput test batch {batch_num}'
+                'description': 'Sustained throughput test batch {}'.format(batch_num)
             })
             duration = time.time() - start_time
-            self.metrics.record_operation(f'sustained_write_batch_{batch_num}', 
+            self.metrics.record_operation('sustained_write_batch_{}'.format(batch_num), 
                                          duration, records_count=batch_size)
         
         # All batches should have similar performance
         batch_stats = []
         for batch_num in range(num_batches):
-            stats = self.metrics.get_statistics(f'sustained_write_batch_{batch_num}')
+            stats = self.metrics.get_statistics('sustained_write_batch_{}'.format(batch_num))
             batch_stats.append(stats['mean_duration'])
         
         # Variance across batches should be low
@@ -508,7 +524,7 @@ class TestWritePerformance(testing.MongoDBTestCase):
         batch_mean = mean(batch_stats)
         batch_cv = (stdev(batch_stats) / batch_mean) * 100 if batch_mean > 1e-9 else 0
         self.assertLess(batch_cv, 30,
-                       f"Sustained write throughput has high variance (CV={batch_cv:.1f}%)")
+                       "Sustained write throughput has high variance (CV={:.1f}%)".format(batch_cv))
     
     def test_unlink_performance(self):
         """Test performance of delete operations."""
@@ -518,7 +534,7 @@ class TestWritePerformance(testing.MongoDBTestCase):
         # Test single deletes
         for i in range(20):
             record_id = self.model.create(cursor, uid, {
-                'name': f'Delete Test {i}',
+                'name': 'Delete Test {}'.format(i),
                 'value': i,
             })
             
@@ -541,9 +557,9 @@ class TestWritePerformance(testing.MongoDBTestCase):
         bulk_stats = self.metrics.get_statistics('bulk_delete_50')
         
         self.assertLess(single_stats['mean_duration'], 0.1,
-                       f"Single deletes averaging {single_stats['mean_duration']:.4f}s should be < 0.1s")
+                       "Single deletes averaging {:.4f}s should be < 0.1s".format(single_stats['mean_duration']))
         self.assertLess(bulk_stats['mean_duration'], 1.0,
-                       f"Bulk deletes (50 records) averaging {bulk_stats['mean_duration']:.4f}s should be < 1.0s")
+                       "Bulk deletes (50 records) averaging {:.4f}s should be < 1.0s".format(bulk_stats['mean_duration']))
 
 
 class TestPerformanceRegression(testing.MongoDBTestCase):
@@ -628,7 +644,7 @@ class TestPerformanceRegression(testing.MongoDBTestCase):
         ids = []
         for i in range(20):
             record_id = self.model.create(cursor, uid, {
-                'name': f'Bulk Test {i}',
+                'name': 'Bulk Test {}'.format(i),
                 'value': i * 10,
             })
             ids.append(record_id)
