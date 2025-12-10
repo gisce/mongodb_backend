@@ -155,10 +155,9 @@ Required for GitHub Actions performance measurement and reporting:
 - `GITHUB_ACTIONS`: Set to "true" to enable performance measurements
 - `GITHUB_ACTIONS_PR`: PR number for posting results (e.g., "123")
 - `GITHUB_TOKEN`: GitHub token for API access to post comments
-- `PYTHON_VERSION`: Python version being tested
-- `MONGO_VERSION`: MongoDB version being tested
-- `PYTHON_VERSION`: Python version being tested
-- `MONGO_VERSION`: MongoDB version being tested
+- `PYTHON_VERSION`: Python version being tested (e.g., "3.11")
+- `PYMONGO_VERSION`: PyMongo version being used (e.g., "3.13.0")
+- `MONGODB_VERSION`: MongoDB version being tested (e.g., "3.0", "5.0", "8.0")
 - Standard ERP environment variables (see workflow files)
 
 ## References

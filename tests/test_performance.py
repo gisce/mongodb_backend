@@ -110,6 +110,8 @@ class PerformanceMetrics:
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'environment': 'GitHub Actions' if os.environ.get('GITHUB_ACTIONS') else 'Local',
                 'python_version': os.environ.get('PYTHON_VERSION', 'unknown'),
+                'pymongo_version': os.environ.get('PYMONGO_VERSION', 'unknown'),
+                'mongodb_version': os.environ.get('MONGODB_VERSION', 'unknown'),
             },
             'summary': {},
             'detailed_metrics': {},
@@ -145,7 +147,10 @@ class PerformanceMetrics:
         print("="*80)
         print(f"\nTest Run: {report['test_run']['timestamp']}")
         print(f"Environment: {report['test_run']['environment']}")
-        print(f"Python Version: {report['test_run']['python_version']}")
+        print(f"\nTest Configuration:")
+        print(f"  Python Version: {report['test_run']['python_version']}")
+        print(f"  PyMongo Version: {report['test_run']['pymongo_version']}")
+        print(f"  MongoDB Version: {report['test_run']['mongodb_version']}")
         
         if report['summary']:
             print("\n" + "-"*80)
@@ -245,7 +250,11 @@ class PerformanceMetrics:
             "",
             f"**Test Run:** {report['test_run']['timestamp']}",
             f"**Environment:** {report['test_run']['environment']}",
-            f"**Python Version:** {report['test_run']['python_version']}",
+            "",
+            "### 🔧 Test Configuration",
+            f"- **Python Version:** {report['test_run']['python_version']}",
+            f"- **PyMongo Version:** {report['test_run']['pymongo_version']}",
+            f"- **MongoDB Version:** {report['test_run']['mongodb_version']}",
             ""
         ]
         
