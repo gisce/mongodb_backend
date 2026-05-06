@@ -179,34 +179,24 @@ class MongoDBBackendTest(testing.MongoDBTestCase):
     def test_default_mongodb_name(self):
         from mongodb_backend.mongodb2 import mdbpool
         # Module installation or previous tests can populate MongoDB defaults in
-        # the process-global OpenERP config. Own this test's precondition, but
-        # avoid clearing auth-related options: FerretDB runs need those
-        # credentials later in MongoDBTestCase.tearDown().
-        default_options = (
-            'mongodb_name',
-            'mongodb_port',
-            'mongodb_host',
-        )
-        original_options = dict(
-            (key, self.openerp.config.options[key])
-            for key in self.openerp.config.options
-            if key in default_options
-        )
+        # the process-global OpenERP config. Own only this test's precondition:
+        # the Mongo database name must be absent so MDBConn falls back to the
+        # current OpenERP database. Keep connection and auth options intact
+        # because FerretDB requires them in MongoDBTestCase.tearDown().
+        original_mongodb_name = self.openerp.config.options.get('mongodb_name')
+        had_mongodb_name = 'mongodb_name' in self.openerp.config.options
 
-        def restore_mongodb_options():
-            for key in default_options:
-                self.openerp.config.options.pop(key, None)
-            self.openerp.config.options.update(original_options)
+        def restore_mongodb_name():
+            self.openerp.config.options.pop('mongodb_name', None)
+            if had_mongodb_name:
+                self.openerp.config.options['mongodb_name'] = original_mongodb_name
 
-        self.addCleanup(restore_mongodb_options)
-        for key in default_options:
-            self.openerp.config.options.pop(key, None)
+        self.addCleanup(restore_mongodb_name)
+        self.openerp.config.options.pop('mongodb_name', None)
         mdbpool._connection = None
 
         expect(self.openerp.config.options).to_not(have_keys(
-            'mongodb_name',
-            'mongodb_port',
-            'mongodb_host'
+            'mongodb_name'
         ))
         # After accessing to getting object variables are defined
         db = mdbpool.get_db()
