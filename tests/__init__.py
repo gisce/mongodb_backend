@@ -180,37 +180,33 @@ class MongoDBBackendTest(testing.MongoDBTestCase):
         from mongodb_backend.mongodb2 import mdbpool
         # Module installation or previous tests can populate MongoDB defaults in
         # the process-global OpenERP config. Own this test's precondition, but
-        # restore the process-global config after tearDown has dropped the test
-        # database.
-        managed_options = ('db_readonly',)
-
-        def is_mongodb_option(key):
-            return key.startswith('mongodb_') or key in managed_options
-
+        # avoid clearing auth-related options: FerretDB runs need those
+        # credentials later in MongoDBTestCase.tearDown().
+        default_options = (
+            'mongodb_name',
+            'mongodb_port',
+            'mongodb_host',
+        )
         original_options = dict(
             (key, self.openerp.config.options[key])
             for key in self.openerp.config.options
-            if is_mongodb_option(key)
+            if key in default_options
         )
 
         def restore_mongodb_options():
-            for key in list(self.openerp.config.options):
-                if is_mongodb_option(key):
-                    self.openerp.config.options.pop(key)
+            for key in default_options:
+                self.openerp.config.options.pop(key, None)
             self.openerp.config.options.update(original_options)
 
         self.addCleanup(restore_mongodb_options)
-        for key in list(self.openerp.config.options):
-            if is_mongodb_option(key):
-                self.openerp.config.options.pop(key)
+        for key in default_options:
+            self.openerp.config.options.pop(key, None)
         mdbpool._connection = None
 
         expect(self.openerp.config.options).to_not(have_keys(
             'mongodb_name',
             'mongodb_port',
-            'mongodb_host',
-            'mongodb_user',
-            'mongodb_pass'
+            'mongodb_host'
         ))
         # After accessing to getting object variables are defined
         db = mdbpool.get_db()
