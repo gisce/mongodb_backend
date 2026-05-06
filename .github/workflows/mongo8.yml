@@ -95,6 +95,12 @@ jobs:
 
       - name: Run tests
         env:
+          GITHUB_ACTIONS: true
+          GITHUB_ACTIONS_PR: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHON_VERSION: ${{ matrix.python-version }}
+          PYMONGO_VERSION: "3.13.0"
+          MONGODB_VERSION: "8.0"
           OPENERP_SECRET: shhhhhhhht
           OPENERP_REDIS_URL: redis://localhost:6379/0
           OPENERP_ROOT_PATH: ${{ github.workspace }}/src/erp/server/bin

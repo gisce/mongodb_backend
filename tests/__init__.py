@@ -11,6 +11,7 @@ from mongodb_backend import fields as mdb_fields
 from mongodb_backend import mongodb2
 from mongodb_backend import orm_mongodb
 import datetime
+from .test_performance import *
 
 
 class TestTranslateDomain(unittest.TestCase):

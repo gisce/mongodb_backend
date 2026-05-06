@@ -114,12 +114,8 @@ class orm_mongodb(orm.orm_template):
                                                           self._table))
             def_values = self.default_get(cr, 1, def_fields)
             try:
-                collection.update({},
-                                  {'$set': def_values},
-                                  upsert=False,
-                                  manipulate=False,
-                                  w=1,
-                                  multi=True)
+                collection.update_many({},
+                                       {'$set': def_values})
             except Exception as e:
                 raise except_orm('MongoDB update defaults error', '{}'.format(e))
 
@@ -418,9 +414,8 @@ class orm_mongodb(orm.orm_template):
 
         #bulk update with modifiers, and safe mode
         try:
-            collection.update({'id': {'$in': ids}},
-                              {'$set': vals},
-                              False, False, True, True, w=1)
+            collection.update_many({'id': {'$in': ids}},
+                                   {'$set': vals})
         except Exception as e:
             raise except_orm('MongoDB update error', '{}'.format(e))
 
@@ -566,7 +561,7 @@ class orm_mongodb(orm.orm_template):
         self.unlink_binary_gridfs_fields(collection, ids)
         #Remove with safe mode
         try:
-            collection.remove({'id': {'$in': ids}}, True, w=1)
+            collection.delete_many({'id': {'$in': ids}})
         except Exception as e:
             raise except_orm('MongoDB unlink error', '{}'.format(e))
 
