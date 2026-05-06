@@ -178,6 +178,33 @@ class MongoDBBackendTest(testing.MongoDBTestCase):
 
     def test_default_mongodb_name(self):
         from mongodb_backend.mongodb2 import mdbpool
+        # Module installation or previous tests can populate MongoDB defaults in
+        # the process-global OpenERP config. Own this test's precondition, but
+        # restore the process-global config after tearDown has dropped the test
+        # database.
+        managed_options = ('db_readonly',)
+
+        def is_mongodb_option(key):
+            return key.startswith('mongodb_') or key in managed_options
+
+        original_options = dict(
+            (key, self.openerp.config.options[key])
+            for key in self.openerp.config.options
+            if is_mongodb_option(key)
+        )
+
+        def restore_mongodb_options():
+            for key in list(self.openerp.config.options):
+                if is_mongodb_option(key):
+                    self.openerp.config.options.pop(key)
+            self.openerp.config.options.update(original_options)
+
+        self.addCleanup(restore_mongodb_options)
+        for key in list(self.openerp.config.options):
+            if is_mongodb_option(key):
+                self.openerp.config.options.pop(key)
+        mdbpool._connection = None
+
         expect(self.openerp.config.options).to_not(have_keys(
             'mongodb_name',
             'mongodb_port',
