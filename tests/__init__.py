@@ -266,6 +266,67 @@ class MongoDBORMTests(testing.MongoDBTestCase):
         # Reset _rec_name to default
         MongoModelTest._rec_name = 'name'
 
+    def test_read_flat_sorts_in_python_without_mongodb_sort(self):
+        self.create_model()
+        cursor = self.txn.cursor
+        uid = self.txn.user
+        mmt_obj = self.openerp.pool.get(MongoModelTest._name)
+        records = [
+            ('same', 1),
+            ('same', 3),
+            ('alpha', 2),
+        ]
+        ids = [mmt_obj.create(cursor, uid, {
+            'name': name,
+            'integer_field_with_index': number,
+        }) for name, number in records]
+
+        from mongodb_backend.mongodb2 import mdbpool
+        collection = mdbpool.get_collection(mmt_obj._table)
+        find_calls = []
+
+        class RecordingCollection(object):
+            def find(self, *args, **kwargs):
+                find_calls.append((args, kwargs))
+                return collection.find(*args, **kwargs)
+
+            def __getattr__(self, name):
+                return getattr(collection, name)
+
+        original_get_collection = mdbpool.get_collection
+
+        def recording_get_collection(table):
+            if table == mmt_obj._table:
+                return RecordingCollection()
+            return original_get_collection(table)
+
+        original_order = mmt_obj._order
+        mdbpool.get_collection = recording_get_collection
+        mmt_obj._order = 'name asc, integer_field_with_index desc'
+        try:
+            result = mmt_obj.read(cursor, uid, ids, ['name'])
+        finally:
+            mmt_obj._order = original_order
+            mdbpool.get_collection = original_get_collection
+
+        self.assertEqual([record['name'] for record in result],
+                         ['alpha', 'same', 'same'])
+        self.assertEqual([record['id'] for record in result],
+                         [ids[2], ids[1], ids[0]])
+        self.assertNotIn('integer_field_with_index', result[0])
+        self.assertTrue(find_calls)
+        self.assertNotIn('sort', find_calls[-1][1])
+        self.assertIn('integer_field_with_index', find_calls[-1][0][1])
+
+    def test_mongo_sort_key_handles_nulls_and_supported_scalar_types(self):
+        values = [
+            datetime.datetime(2024, 1, 1), True, 'text', 2, None
+        ]
+        values.sort(key=orm_mongodb.orm_mongodb._mongo_sort_key)
+        self.assertEqual(values,
+                         [None, 2, 'text', True,
+                          datetime.datetime(2024, 1, 1)])
+
     def test_name_search(self):
         self.create_model()
         cursor = self.txn.cursor
