@@ -359,10 +359,24 @@ class orm_mongodb(orm.orm_template):
         res = []
         if len(fields_pre):
             order = self._compute_order(cr, user)
+            order_fields = [field_name for field_name, direction in order]
+            projection = list(fields_pre) + ['id']
+            for field_name in order_fields:
+                if field_name not in projection:
+                    projection.append(field_name)
             mongo_cr = collection.find({'id': {'$in': ids}},
-                                       fields_pre + ['id'],
-                                       sort=order)
+                                       projection)
             res = [x for x in mongo_cr]
+            # Python's sort is stable. Applying criteria in reverse order
+            # preserves the priority and direction of MongoDB's compound sort.
+            for field_name, direction in reversed(order):
+                res.sort(key=lambda record, field_name=field_name:
+                         self._mongo_sort_key(record.get(field_name)),
+                         reverse=direction == pymongo.DESCENDING)
+            auxiliary_fields = set(order_fields) - set(fields_pre) - {'id'}
+            for record in res:
+                for field_name in auxiliary_fields:
+                    record.pop(field_name, None)
         else:
             res = [{'id': x} for x in ids]
         #Post process date and datetime fields
@@ -395,6 +409,29 @@ class orm_mongodb(orm.orm_template):
                         else:
                             record[f] = []
         return res
+
+    @staticmethod
+    def _mongo_sort_key(value):
+        """Return a Python 2/3-safe key for MongoDB field values.
+
+        The ranks mirror the BSON comparison order for the scalar types used
+        by this backend. Missing fields and explicit nulls compare equally.
+        """
+        if value is None:
+            return 0, 0
+        if isinstance(value, bool):
+            return 4, value
+        if isinstance(value, Number):
+            return 1, value
+        if isinstance(value, six.string_types):
+            return 2, value
+        if isinstance(value, ObjectId):
+            return 3, value
+        if isinstance(value, datetime):
+            return 5, value
+        # Stored model fields should be scalar. Keep unexpected values
+        # sortable across Python runtimes instead of raising TypeError.
+        return 6, type(value).__name__, six.text_type(value)
 
     def write(self, cr, user, ids, vals, context=None):
 
